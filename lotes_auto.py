@@ -37,6 +37,39 @@ def fmt(v):
 def norm(s):
     return s.strip().strip(".,;:-/").upper()
 
+_ocr = None
+
+def ocr_lines(page):
+    # Lee una pagina escaneada (imagen) con OCR y devuelve sus lineas de texto
+    global _ocr
+    import numpy as np
+    if _ocr is None:
+        from rapidocr_onnxruntime import RapidOCR
+        _ocr = RapidOCR()
+    img = page.to_image(resolution=300).original.convert("RGB")
+    res, _ = _ocr(np.array(img))
+    if not res:
+        return []
+    items = []
+    for box, text, score in res:
+        ys = [p[1] for p in box]
+        xs = [p[0] for p in box]
+        items.append(((min(ys) + max(ys)) / 2, max(ys) - min(ys), min(xs), text))
+    items.sort()
+    lines = []
+    for yc, h, x, t in items:
+        if lines and abs(yc - lines[-1]["y"]) < max(h, lines[-1]["h"]) * 0.6:
+            lines[-1]["parts"].append((x, t))
+        else:
+            lines.append({"y": yc, "h": h, "parts": [(x, t)]})
+    return [" ".join(t for x, t in sorted(l["parts"])) for l in lines]
+
+def page_lines(page):
+    # Usa el texto del PDF si lo tiene; si es escaneado, usa OCR
+    if page.chars:
+        return (page.extract_text() or "").splitlines(), "texto"
+    return ocr_lines(page), "OCR"
+
 def sort_key(s):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
@@ -51,10 +84,12 @@ for n, pdf in enumerate(pdfs, 1):
     print(f"[{n}/{len(pdfs)}] {name}")
     try:
         with pdfplumber.open(pdf) as doc:
-            current, cur_page, chars = None, None, 0
+            current, cur_page = None, None
             for pnum, page in enumerate(doc.pages, 1):
-                chars += len(page.chars)
-                for line in (page.extract_text() or "").splitlines():
+                lines, fuente = page_lines(page)
+                if not lines:
+                    avisos.append([name, pnum, "", "Pagina sin texto legible (ni con OCR)"])
+                for line in lines:
                     events = [(m.start(), "L", m) for m in LOTE_RE.finditer(line)]
                     events += [(m.start(), "C", m) for m in CANT_RE.finditer(line)]
                     if not any(e[1] == "L" for e in events) and LOTE_WORD_RE.search(line):
@@ -68,14 +103,12 @@ for n, pdf in enumerate(pdfs, 1):
                             v = to_num(m.group("n"))
                             if v is not None:
                                 totals[current] = totals.get(current, 0) + v
-                                detail.append([name, pnum, current, fmt(v)])
+                                detail.append([name, pnum, current, fmt(v), fuente])
                                 current = None
                         else:
                             avisos.append([name, pnum, "", "Cantidad sin lote: " + line.strip()[:120]])
             if current:
                 avisos.append([name, cur_page, current, "Lote sin cantidad"])
-            if chars == 0:
-                avisos.append([name, "", "", "Sin texto (posible PDF escaneado)"])
     except Exception as e:
         avisos.append([name, "", "", f"Error: {e}"])
 
@@ -90,7 +123,7 @@ ws.column_dimensions["A"].width = 22
 ws.column_dimensions["B"].width = 20
 
 ws2 = wb.create_sheet("Detalle")
-ws2.append(["Archivo", "Pagina", "Lote", "Cantidad"])
+ws2.append(["Archivo", "Pagina", "Lote", "Cantidad", "Fuente"])
 for r in detail:
     ws2.append(r)
 

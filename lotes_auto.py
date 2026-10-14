@@ -351,6 +351,7 @@ for c in ws[1]:
     c.font = Font(bold=True)
 for lote in sorted(totals, key=sort_key):
     ws.append([lote, fmt(totals[lote])])
+    ws.cell(row=ws.max_row, column=2).number_format = "#,##0"   # 1,406 con coma de miles
 ws.column_dimensions["A"].width = 22
 ws.column_dimensions["B"].width = 20
 

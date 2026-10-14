@@ -4,41 +4,43 @@ Este archivo se tradujo automáticamente del original inglés con Argos Translat
 
 Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals lee una carpeta de documentos PDF, tales como facturas, notas de entrega y formularios de devolución de productos, encuentra cada número de lotes y el número de piezas registradas para él, y escribe el número total de piezas por lote a un archivo Excel.
+pdf-totals lee una carpeta de documentos PDF, tales como facturas, notas de entrega y formularios para productos devueltos. Encuentra cada número de lotes y el número de piezas que se registran para cada lote. A continuación, escribe el número total de piezas para cada lote a un archivo Excel.
 
-Lee PDFs que contienen texto directamente y lee PDFs escaneados con reconocimiento de caracteres ópticos (OCR). Comprende varios diseños comunes: tablas con una columna de lote y una columna de cantidad, tablas donde el número de lote aparece dentro de la descripción, formas donde cada columna es un producto, y líneas etiquetadas como `LOTE: 25240310` seguido por `CANTIDAD: 1,250`.
+El programa lee el texto de PDF que contiene texto. Lee PDF escaneado con reconocimiento de caracteres ópticos (OCR). Reconoce varios diseños comunes: tablas con una columna de lote y una columna de cantidad, tablas en las que el número de lote es parte de la descripción, formas en las que cada columna describe un producto, y líneas con etiquetas como `LOTE: 25240310` y `CANTIDAD: 1,250`.
 
-El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Se espera que los números de lotes tengan exactamente ocho dígitos y comiencen con `24`, `25` o `26`; esta regla es fácil de cambiar.
+El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y comenzar con `24`, `25` o `26`. Esta regla es fácil de cambiar.
 
 ## Necesidades
 
-- Python 3.9 o posterior. Python 3.12 se recomienda porque el motor OCR preferido soporta Python hasta 3.12.
+- Python 3.9 o una versión más nueva. `Python 3.12` se recomienda, ya que el motor OCR preferido soporta las versiones de Python hasta `Python 3.12`.
 - Los paquetes Python pdfplumber y openpyxl.
-- Para PDF escaneados: rapidocr_onnxruntime (Python 3.12 o anterior) o rapidocr junto con onnxruntime (Python 3.13 o posterior).
+- Para PDF escaneado: el paquete rapidocr_onnxruntime con `Python 3.12` o una versión anterior, o los paquetes rapidocr y onnxruntime con `Python 3.13` o una versión más reciente.
 
-Los derechos de administrador no son necesarios en Windows o macOS. En Linux y BSD, instalar Python de los paquetes del sistema requiere root; en Linux esto se puede evitar con la herramienta uv, como se describe en el manual. OCR está disponible en Windows, macOS y Linux basado en glibc. En FreeBSD, OpenBSD, NetBSD y Alpine Linux sólo se pueden leer PDFs que contienen texto; PDF escaneados se enumeran para revisión manual.
+En Windows y macOS no necesita derechos de administrador. En Linux y en los sistemas BSD, necesita que el usuario root instale Python desde los paquetes del sistema. En Linux se puede evitar esto con el programa uv, como describe el manual.
+
+OCR está disponible en Windows, en macOS y en distribuciones Linux que usan glibc. En FreeBSD, OpenBSD, NetBSD y Alpine Linux, el programa sólo lee PDFs que contienen texto. Lista PDF escaneado para revisión manual.
 
 ## Inicio rápido
 
-Windows 10 y 11, en PowerShell, sin derechos de administrador:
+Windows 10 y Windows 11, en PowerShell, sin derechos de administrador:
 
 ```
 $d="$env:USERPROFILE\pdf-totals"; New-Item -ItemType Directory -Force "$d\python" | Out-Null; Invoke-WebRequest -UseBasicParsing https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile "$env:TEMP\py-embed.zip"; Expand-Archive -Force "$env:TEMP\py-embed.zip" "$d\python"; (Get-Content "$d\python\python312._pth") -replace '^#\s*import site','import site' | Set-Content "$d\python\python312._pth"; Invoke-WebRequest -UseBasicParsing https://bootstrap.pypa.io/get-pip.py -OutFile "$d\python\get-pip.py"; & "$d\python\python.exe" "$d\python\get-pip.py" --no-warn-script-location; & "$d\python\python.exe" -m pip install pdfplumber openpyxl rapidocr_onnxruntime msvc-runtime; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-macOS, con Python 3.12 instalado:
+macOS, cuando se instala `Python 3.12`:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-Linux, con Python 3.12 instalado:
+Linux, cuando se instala `Python 3.12`:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && venv/bin/pip uninstall -y opencv-python && venv/bin/pip install opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-La instalación en otras distribuciones de Linux y en los BSD se describe en el manual.
+El manual describe la instalación en otras distribuciones de Linux y en FreeBSD, OpenBSD y NetBSD.
 
 ## Usage
 
@@ -48,31 +50,31 @@ Windows:
 & "$env:USERPROFILE\pdf-totals\python\python.exe" "$env:USERPROFILE\pdf-totals\lotes_auto.py" "C:\path\to\pdfs"
 ```
 
-macOS, Linux y BSD:
+macOS, Linux, FreeBSD, OpenBSD y NetBSD:
 
 ```
 ~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
 ```
 
-La carpeta se registra recursivamente. Los archivos cuyo nombre contiene `FALTA REVISION` son saltados. Cuando el programa termina, la carpeta contiene:
+El programa también busca todos los subcarpetas. Se salta cada archivo cuyo nombre contiene `FALTA REVISION`. Cuando el programa termina, la carpeta contiene estos archivos:
 
-- `totales_lotes.xlsx`: una fila por lote con el número total de piezas.
-- `detalle_lotes.txt`: cada cantidad que se agregó a cada lote y el PDF que provenía.
-- `revisar_a_mano.txt`: PDFs que fueron saltados y PDFs de los que no se podía leer ninguna cantidad.
-- `sin_resultado.log`: el texto que fue leído en cada PDF que no produjo cantidad.
+- totales_lotes.xlsx contiene una fila para cada lote con el número total de piezas.
+- detalle_lotes.txt enumera cada cantidad que se agregó a cada lote y el PDF que vino de.
+- revisar_a_mano.txt enumera los PDFs saltados y los PDF de los que no se puede leer ninguna cantidad.
+- sin_resultado.log contiene el texto que fue leído en cada PDF que no produjo cantidad.
 
-Para ver lo que el programa lee y detecta en un solo PDF sin escribir ningún archivo, ejecute `diagnostico.py` con el camino del PDF.
+Para ver lo que el programa lee y detecta en un PDF, ejecute diagnostico.py con el camino del PDF. diagnostico.py no escribe ningún archivo.
 
 ## Documentación
 
-El manual describe cada opción, los diseños compatibles, los archivos de salida, los ajustes de configuración y la instalación en cada plataforma:
+El manual describe todas las opciones, los diseños compatibles, los archivos de salida, la configuración y la instalación en cada sistema:
 
 - Inglés: [docs/en/MANUAL.md](docs/en/MANUAL.md)
 - Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)
 - Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 
-Los documentos alemanes y españoles se traducen automáticamente de los originales ingleses con Argos Translate. Si no están de acuerdo, los documentos ingleses son autorizados.
+Los documentos alemán y español se traducen automáticamente de los documentos ingleses con Argos Translate. Si una traducción difiere del documento inglés, se aplica el documento inglés.
 
 ## Licencia
 
-MIT. Vea el archivo LICENSE.
+Licencia MIT. Vea el archivo LICENSE.

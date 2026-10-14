@@ -13,6 +13,9 @@ from openpyxl.styles import Font
 # ===== Etiquetas (puedes agregar palabras aqui) =====
 LOTE_WORDS = r"l[o0]te|serial|serie|n/s|s/n"
 CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
+# En formatos "de lado" (cada columna es un producto) puede haber varios renglones de
+# cantidad (Recibida, Facturada...). Se usa el primero de esta lista que tenga numeros:
+PRIORIDAD_CANTIDAD = ["pieza", "devuel", "recibid", "cantidad", "factur"]
 # =====================================================
 
 # El OCR a veces quita espacios ("CANTIDADENPIEZAS:1,250"), por eso no se exigen.
@@ -108,6 +111,65 @@ def in_column(row, col, need_digit=True):
     return best[1] if best else None
 
 
+def explode(tok):
+    """Separa una caja de texto con varias palabras, estimando la posicion de cada una."""
+    x0, x1, y, h, text = tok
+    out, width = [], max(len(text), 1)
+    for m in re.finditer(r"\S+", text):
+        a = x0 + (x1 - x0) * m.start() / width
+        b = x0 + (x1 - x0) * m.end() / width
+        out.append((a, b, m.group()))
+    return out
+
+
+def label_and_values(row):
+    """Etiqueta del renglon (palabras iniciales sin numeros) y el resto de palabras."""
+    words = [w for t in row["toks"] for w in explode(t)]
+    i = 0
+    while i < len(words) and not re.search(r"\d", words[i][2]):
+        i += 1
+    return " ".join(w[2] for w in words[:i]), words[i:]
+
+
+def parse_sideways(rows):
+    """Formato de lado: renglon 'Lote' con un lote por columna y renglones de cantidad
+    con el valor de cada columna debajo/alineado."""
+    found = []
+    for i, row in enumerate(rows):
+        label, vals = label_and_values(row)
+        if not LOTE_HDR.search(label):
+            continue
+        cols = [((a + b) / 2, norm(w)) for a, b, w in vals if re.search(r"\d{3,}", w)]
+        if len(cols) < 2:
+            continue
+        xs = sorted(c[0] for c in cols)
+        gaps = [b - a for a, b in zip(xs, xs[1:])]
+        tol = sorted(gaps)[len(gaps) // 2] * 0.5
+        best = None
+        for r2 in rows[max(0, i - 15):i + 25]:
+            if r2 is row:
+                continue
+            lab2, vals2 = label_and_values(r2)
+            if not CANT_HDR.search(lab2):
+                continue
+            prio = next((k for k, w in enumerate(PRIORIDAD_CANTIDAD) if w in lab2.lower()), len(PRIORIDAD_CANTIDAD))
+            pairs = []
+            for a, b, w in vals2:
+                m = re.fullmatch(r"\(?(\d[\d.,]*)\)?", w)
+                v = to_num(m.group(1)) if m else None
+                if v is None:
+                    continue
+                cx = (a + b) / 2
+                col = min(cols, key=lambda c: abs(c[0] - cx))
+                if abs(col[0] - cx) <= tol:
+                    pairs.append((col[1], v))
+            if pairs and (best is None or prio < best[0]):
+                best = (prio, pairs)
+        if best:
+            found += best[1]
+    return found
+
+
 def parse_table(rows):
     """Formatos 1 y 2: encabezado CANTIDAD (y quiza LOTE) con valores debajo."""
     found = []
@@ -183,6 +245,7 @@ print(f"{len(pdfs)} PDFs encontrados en {folder}")
 
 totals = {}
 n_total = 0
+sin_resultado = []
 for n, pdf in enumerate(pdfs, 1):
     name = str(pdf.relative_to(folder))
     print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
@@ -193,7 +256,7 @@ for n, pdf in enumerate(pdfs, 1):
                 toks, fuente = page_tokens(page)
                 rows = group_rows(toks)
                 leidas += [r["text"] for r in rows]
-                t = parse_table(rows)
+                t = parse_sideways(rows) or parse_table(rows)
                 if t:
                     found += t
                 else:
@@ -204,6 +267,7 @@ for n, pdf in enumerate(pdfs, 1):
         n_total += len(found)
         print(f"  -> {len(found)} cantidades ({fuente})")
         if not found:
+            sin_resultado.append(name)
             print("     Texto leido de este PDF (primeras 15 lineas):")
             for l in leidas[:15]:
                 print("     | " + l)
@@ -235,4 +299,10 @@ except PermissionError:
     sys.exit(1)
 
 print(f"\n{len(totals)} lotes | {n_total} cantidades leidas")
+if sin_resultado:
+    rev = folder / "revisar_a_mano.txt"
+    rev.write_text("\n".join(sin_resultado), encoding="utf-8")
+    print(f"{len(sin_resultado)} PDFs sin cantidades legibles (lista en {rev.name}):")
+    for nm in sin_resultado:
+        print("   - " + nm)
 print(f"Excel: {out}")

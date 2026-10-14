@@ -4,7 +4,7 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals liest einen Ordner mit PDF-Dokumenten wie Rechnungen, Lieferscheinen und Formularen für zurückgegebene Produkte. Es findet jede Chargennummer und die Anzahl der Stücke, die für jede Charge aufgezeichnet wird. Es schreibt dann die Gesamtzahl der Stücke für jeden Batch in eine Excel-Datei.
+pdf-totals liest einen Ordner mit PDF-Dokumenten wie Rechnungen, Lieferscheinen und Formularen für zurückgegebene Produkte. Es findet jede Chargennummer und die Anzahl der Stücke, die für jede Charge aufgezeichnet wird. Es schreibt dann die Gesamtzahl der Stücke für jede Charge in eine Excel-Datei.
 
 Das Programm liest den Text von PDFs, die Text enthalten. Es liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es erkennt mehrere gängige Layouts: Tabellen mit einer Chargenspalte und einer Mengenspalte, Tabellen, in denen die Chargennummer Teil der Beschreibung ist, Formulare, in denen jede Spalte ein Produkt beschreibt, und Zeilen mit Etiketten wie `LOTE: 25240310` und `CANTIDAD: 1,250`.
 
@@ -13,8 +13,8 @@ Das Programm wurde für Dokumente über zurückgegebene pharmazeutische Produkte
 ## Anforderungen
 
 - Python 3.9 oder eine neuere Version. `Python 3.12` wird empfohlen, da die bevorzugte OCR-Engine Python-Versionen bis `Python 3.12` unterstützt.
-- Die Python Pakete pdfplumber und openpyxl.
-- Für gescannte PDFs: das Paket rapidocr_onnxruntime mit `Python 3.12` oder einer älteren Version, oder die Pakete rapidocr und onnxruntime mit `Python 3.13` oder einer neueren Version.
+- Die Python-Pakete pdfplumber und openpyxl.
+- Für gescannte PDFs: das Paket rapidocr_onnxruntime mit `Python 3.12` oder einer älteren Version oder die Pakete rapidocr und onnxruntime mit `Python 3.13` oder einer neueren Version.
 
 Unter Windows und macOS benötigen Sie keine Administratorrechte. Unter Linux und auf den BSD-Systemen muss der root-Benutzer Python aus den Paketen des Systems installieren. Unter Linux können Sie dies mit dem Programm uv vermeiden, wie das Handbuch beschreibt.
 
@@ -42,7 +42,7 @@ mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/
 
 Das Handbuch beschreibt die Installation auf anderen Linux-Distributionen und auf FreeBSD, OpenBSD und NetBSD.
 
-## Nutzung
+## Wie man das Programm benutzt
 
 Windows:
 
@@ -59,8 +59,8 @@ macOS, Linux, FreeBSD, OpenBSD und NetBSD:
 Das Programm durchsucht auch alle Unterordner. Es überspringt jede Datei, deren Name `FALTA REVISION` enthält. Wenn das Programm beendet ist, enthält der Ordner diese Dateien:
 
 - totales_lotes.xlsx enthält eine Zeile für jede Charge mit der Gesamtzahl der Stücke.
-- detalle_lotes.txt listet alle Beträge auf, die zu jedem Batch hinzugefügt wurden, und das PDF, aus dem es stammt.
-- revisar_a_mano.txt listet die übersprungenen PDFs und die PDFs auf, aus denen keine Menge gelesen werden konnte.
+- detalle_lotes.txt listet jeden Betrag auf, der zu jeder Charge hinzugefügt wurde, und den Namen des PDF, das ihn enthält.
+- revisar_a_mano.txt listet die übersprungenen PDFs und die PDFs auf, von denen keine Menge gelesen werden konnte.
 - sin_resultado.log enthält den Text, der aus jedem PDF gelesen wurde, das keine Menge produziert hat.
 
 Um zu sehen, was das Programm in einem PDF liest und erkennt, führen Sie diagnostico.py mit dem Pfad des PDF aus. diagnostico.py schreibt keine Dateien.

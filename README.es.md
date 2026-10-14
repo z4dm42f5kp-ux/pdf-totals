@@ -1,20 +1,20 @@
 # pdf-totals
 
-Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
+Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
 Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
 pdf-totals lee una carpeta de documentos PDF, tales como facturas, notas de entrega y formularios para productos devueltos. Encuentra cada número de lotes y el número de piezas que se registran para cada lote. A continuación, escribe el número total de piezas para cada lote a un archivo Excel.
 
-El programa lee el texto de PDF que contiene texto. Lee PDF escaneado con reconocimiento de caracteres ópticos (OCR). Reconoce varios diseños comunes: tablas con una columna de lote y una columna de cantidad, tablas en las que el número de lote es parte de la descripción, formas en las que cada columna describe un producto, y líneas con etiquetas como `LOTE: 25240310` y `CANTIDAD: 1,250`.
+El programa lee el texto de PDF que contiene texto. Lee PDF escaneado con reconocimiento de caracteres ópticos (OCR). Reconoce varios diseños comunes: tablas con columna de lotes y columna de cantidad, tablas en las que el número de lotes es parte de la descripción, formas en las que cada columna describe un producto, y líneas con etiquetas como `LOTE: 25240310` y `CANTIDAD: 1,250`.
 
-El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y comenzar con `24`, `25` o `26`. Esta regla es fácil de cambiar.
+El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `24`, `25` o `26`. Esta regla es fácil de cambiar.
 
 ## Necesidades
 
 - Python 3.9 o una versión más nueva. `Python 3.12` se recomienda, ya que el motor OCR preferido soporta las versiones de Python hasta `Python 3.12`.
 - Los paquetes Python pdfplumber y openpyxl.
-- Para PDF escaneado: el paquete rapidocr_onnxruntime con `Python 3.12` o una versión anterior, o los paquetes rapidocr y onnxruntime con `Python 3.13` o una versión más reciente.
+- Para PDF escaneados: el paquete rapidocr_onnxruntime con `Python 3.12` o una versión anterior, o los paquetes rapidocr y onnxruntime con `Python 3.13` o una versión más reciente.
 
 En Windows y macOS no necesita derechos de administrador. En Linux y en los sistemas BSD, necesita que el usuario root instale Python desde los paquetes del sistema. En Linux se puede evitar esto con el programa uv, como describe el manual.
 
@@ -42,7 +42,7 @@ mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/
 
 El manual describe la instalación en otras distribuciones de Linux y en FreeBSD, OpenBSD y NetBSD.
 
-## Usage
+## Cómo utilizar el programa
 
 Windows:
 
@@ -59,7 +59,7 @@ macOS, Linux, FreeBSD, OpenBSD y NetBSD:
 El programa también busca todos los subcarpetas. Se salta cada archivo cuyo nombre contiene `FALTA REVISION`. Cuando el programa termina, la carpeta contiene estos archivos:
 
 - totales_lotes.xlsx contiene una fila para cada lote con el número total de piezas.
-- detalle_lotes.txt enumera cada cantidad que se agregó a cada lote y el PDF que vino de.
+- detalle_lotes.txt enumera cada cantidad que se agregó a cada lote y el nombre del PDF que lo contiene.
 - revisar_a_mano.txt enumera los PDFs saltados y los PDF de los que no se puede leer ninguna cantidad.
 - sin_resultado.log contiene el texto que fue leído en cada PDF que no produjo cantidad.
 
@@ -73,7 +73,7 @@ El manual describe todas las opciones, los diseños compatibles, los archivos de
 - Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)
 - Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 
-Los documentos alemán y español se traducen automáticamente de los documentos ingleses con Argos Translate. Si una traducción difiere del documento inglés, se aplica el documento inglés.
+Los documentos alemán y español se traducen automáticamente de los documentos ingleses con Argos Translate. Si una traducción difiere del documento en inglés, se aplica el documento en inglés.
 
 ## Licencia
 

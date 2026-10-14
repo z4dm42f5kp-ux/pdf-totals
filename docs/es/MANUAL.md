@@ -1,6 +1,6 @@
 # Manual de pdf-totals
 
-Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
+Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
 ## Nombre
 
@@ -17,13 +17,13 @@ python diagnostico.py [-h] [--version] [--lineas N] PATH
 
 ## Descripción
 
-lotes_auto.py busca la carpeta FOLDER y todos sus subcarpetas para archivos cuyo nombre termina en .pdf. En cada PDF encuentra cada número de lotes y el número de piezas que el documento registra para ese lote. Luego calcula el número total de piezas de cada lote sobre todos los documentos y escribe una fila por lote a un libro de trabajo de Excel. Cuando un lote aparece en varios documentos, o varias veces en un solo documento, sus cantidades se agregan juntas.
+lotes_auto.py busca la carpeta FOLDER y todos sus subcarpetas para archivos cuyo nombre termina en .pdf. En cada PDF encuentra cada número de lotes y el número de piezas que el documento registra para ese lote. A continuación, calcula el número total de piezas de cada lote sobre todos los documentos y escribe una fila por lote a un libro de trabajo de Excel. Cuando un lote aparece en varios documentos, o varias veces en un solo documento, sus cantidades se agregan juntas.
 
 Cuando un PDF contiene texto, el programa lee el texto directamente. Cuando una página no contiene texto, el programa trata la página como imagen escaneada y la lee con reconocimiento de caracteres ópticos (OCR). Si no se instala ningún motor OCR, el programa no lee PDFs escaneados y los enumera para revisión manual.
 
 El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Todos los mensajes y archivos de salida están en español. Este manual explica su significado.
 
-diagnostico.py utiliza exactamente el mismo código que lotes_auto.py para leer y analizar documentos. Muestra el texto que leía de cada PDF, lo que detectó en ese texto y el resultado. Úsalo para examinar un PDF que no se lee correctamente. No escribe ningún archivo.
+diagnostico.py utiliza exactamente el mismo código que lotes_auto.py para leer y analizar documentos. Muestra el texto que leía de cada PDF, lo que detectó en ese texto, y el resultado. Úsalo para examinar un PDF que no se lee correctamente. No escribe ningún archivo.
 
 ## Diseños compatibles
 
@@ -31,13 +31,13 @@ El programa reconoce cuatro diseños. Examina cada página en el orden dado aqu�
 
 1. Formas en las que cada columna describe un producto. Una fila tiene una etiqueta de lote, como `Lote`, y contiene un número de lote por columna. Otras filas tienen una etiqueta de cantidad, como `Cantidad Recibida` o `Cantidad Facturada`, y contienen la cantidad de cada producto en la misma columna. Si hay varias filas de cantidad, el programa elige una por la prioridad que se describe en la sección Configuración.
 
-2. Tablas con títulos de columna. Un título de columna como `CANTIDAD`, `PIEZAS` o `No. de piezas` marca la columna de cantidad, y el programa lee los valores debajo de ella. El programa toma el número de lotes de una columna con un título como `LOTE`. Si no hay tal columna, toma el número de lote de cualquier otro lugar en la misma fila, por ejemplo de la descripción, o de las dos filas siguientes. Un título de columna que está escrito en dos líneas, como `PIEZAS` sobre `DEVUELTAS`, se lee como un título.
+2. Tablas con títulos de columna. Un título de columna como `CANTIDAD`, `PIEZAS` o `No. de piezas` marca la columna de cantidad, y el programa lee los valores de abajo. El programa toma el número de lotes de una columna con un título como `LOTE`. Si no hay tal columna, toma el número de lote de cualquier otro lugar en la misma fila, por ejemplo de la descripción, o de las dos filas siguientes. Un título de columna que está escrito en dos líneas, como `PIEZAS` sobre `DEVUELTAS`, se lee como un título.
 
-3. Líneas con etiquetas, en las que el lote viene primero. Un ejemplo es una línea `LOTE: 25240310` seguida de una línea `CANTIDAD EN PIEZAS: 1,250`. El programa empareja cada lote con la primera cantidad que lo sigue.
+3. Líneas de texto con etiquetas, en las que el lote viene primero. Un ejemplo es una línea `LOTE: 25240310` seguida de una línea `CANTIDAD EN PIEZAS: 1,250`. El programa empareja cada lote con la primera cantidad que lo sigue.
 
-4. Líneas con etiquetas, en las que la cantidad viene primero. El programa empareja cada cantidad con el primer lote que lo sigue. La primera etiqueta del documento decide si el documento utiliza el diseño 3 o el diseño 4.
+4. Líneas de texto con etiquetas, en las que la cantidad viene primero. El programa empareja cada cantidad con el primer lote que lo sigue. La primera etiqueta del documento decide si el documento utiliza el diseño 3 o el diseño 4.
 
-Estas palabras son reconocidas como etiquetas para lotes: `lote`, `serie`, `serial`, `n/s` y `s/n`. Pueden combinarse con `No.`, `Num.` o `Numero`.
+Estas palabras son reconocidas como etiquetas por lotes: `lote`, `serie`, `serial`, `n/s` y `s/n`. Pueden combinarse con `No.`, `Num.` o `Numero`.
 
 Estas palabras se reconocen como etiquetas de cantidad: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.` y `uds`.
 
@@ -50,7 +50,7 @@ La palabra `unidad` por sí sola no marca una cantidad, porque nombra la unidad 
 - Un número de lote tiene exactamente ocho dígitos y comienza con `24`, `25` o `26`. El programa ignora todos los demás números, por ejemplo precios, cantidades, fechas y códigos de producto. Si el OCR adjunta otros caracteres a un número de lote, como una barra vertical, el programa los elimina.
 - El programa lee números en notación mexicana. Un coma separa los miles y un punto separa los decimales. Por ejemplo, `1,250` es mil doscientos cincuenta, y `1,250.50` es mil doscientos cincuenta y medio.
 - El programa ignora las cantidades que tienen decimales, y las cantidades que son cero o negativo, porque un número de piezas es siempre un número entero. Esta regla también impide que los precios sean contados como piezas.
-- El programa salta cada archivo cuyo nombre contiene `FALTA REVISION`. El capital y las letras pequeñas se tratan por igual, y el O puede tener un acento. Los archivos eliminados no cuentan hacia ningún total.
+- El programa salta cada archivo cuyo nombre contiene `FALTA REVISION`. El programa ignora la diferencia entre el caso superior y el caso inferior, y el O puede tener un acento. Los archivos eliminados no cuentan hacia ningún total.
 - Si una sola cantidad es mayor que `50,000`, el programa todavía lo añade al total. Cuando el programa termina, reporta cantidades como sospechosas.
 
 ## Opciones
@@ -93,7 +93,7 @@ Mientras funciona, lotes_auto.py muestra una línea para cada PDF. El texto desp
 
 Al final, el programa muestra el número de lotes y cantidades y los nombres de los archivos que escribió. Si una sola cantidad es mayor que `50,000`, también muestra una lista de estas cantidades bajo el título `cantidades sospechosamente grandes`.
 
-## Códigos de devolución
+## Valores de retorno del programa
 
 - `0` significa que el programa terminó con éxito.
 - `1` significa que el programa no pudo escribir el archivo Excel. Normalmente el archivo está abierto en Excel.
@@ -105,7 +105,7 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 `LOTE_WORDS` y `CANT_WORDS` son expresiones regulares. Contienen las palabras que marcan números y cantidades de lote.
 
-`PRIORIDAD_CANTIDAD` decide qué columna de cantidad o fila se utiliza cuando un documento tiene varios. El programa utiliza la primera palabra en esta lista que aparece en un título de columna. El pedido por defecto es `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Esto significa que se prefiere una columna sobre piezas o sobre bienes devueltos, y que sólo se utiliza una cantidad facturada si no existe otra cantidad.
+`PRIORIDAD_CANTIDAD` decide qué columna de cantidad o fila se utiliza cuando un documento tiene varios. El programa utiliza la primera palabra en esta lista que aparece en un título de columna. La lista predeterminada es `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Esto significa que se prefiere una columna sobre piezas o sobre bienes devueltos, y que una cantidad facturada se utiliza sólo si no existe otra cantidad.
 
 `AVISO_CANTIDAD_GRANDE` es el límite por encima del cual una sola cantidad es reportada como sospechosa. El valor predeterminado es `50000`.
 
@@ -119,8 +119,8 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 El programa necesita Python y los paquetes Python pdfplumber y openpyxl. Para leer PDF escaneado, también necesita un motor OCR:
 
-- Con `Python 3.12` o una versión anterior: el paquete rapidocr_onnxruntime. Este es el motor preferido.
-- Con `Python 3.13` o una versión más reciente: los paquetes rapidocr y onnxruntime. En una prueba, este motor leyó un dígito erróneamente que el motor preferido leyó correctamente. Por esta razón, `Python 3.12` es recomendable si procesa muchos PDF escaneados.
+- Con `Python 3.12` o una versión anterior: el paquete rapidocr_onnxruntime. Este es el motor OCR preferido.
+- Con `Python 3.13` o una versión más reciente: los paquetes rapidocr y onnxruntime. En una prueba, este motor OCR leyó un dígito erróneamente. El motor OCR preferido lee correctamente el mismo dígito. Por esta razón, `Python 3.12` es recomendable si procesa muchos PDF escaneados.
 
 No hay motor OCR disponible para FreeBSD, OpenBSD, NetBSD o Alpine Linux. En estos sistemas, el programa sólo lee PDFs que contienen texto.
 
@@ -136,7 +136,7 @@ $d="$env:USERPROFILE\pdf-totals"; New-Item -ItemType Directory -Force "$d\python
 
 El paquete msvc-runtime copia los archivos de tiempo de ejecución Microsoft Visual C++ en la carpeta Python. El motor OCR necesita estos archivos, y algunos sistemas no los tienen. Puede ignorar las advertencias pip sobre scripts que se instalan en una carpeta que no está en PATH.
 
-Usa `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
+Use `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
 
 Para ejecutar el programa:
 
@@ -150,7 +150,7 @@ Estas instrucciones son para procesadores de 64 bits de Intel y AMD. Para Window
 
 ### macOS
 
-Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). A continuación, ejecute el siguiente comando en la aplicación Terminal:
+Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). Luego ejecute el siguiente comando en la aplicación Terminal:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -180,9 +180,9 @@ Para ejecutar el programa:
 ~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
 ```
 
-Los párrafos siguientes explican cómo obtener `Python 3.12` en distribuciones comunes.
+Los párrafos siguientes explican cómo obtener `Python 3.12` en distribuciones comunes de Linux.
 
-Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario root:
+Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario de root:
 
 ```
 sudo apt install python3-venv curl
@@ -220,11 +220,11 @@ Si su sistema Alpine Linux utiliza `sudo` en lugar de `doas`, reemplace `doas` c
 
 ### FreeBSD, OpenBSD y NetBSD
 
-En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderización PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
+En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderizado PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
 
-El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography se instala desde los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
+El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography está instalado de los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
 
-FreeBSD. Ejecute el primer comando como el usuario root, por ejemplo con `su` o `sudo`:
+En FreeBSD, ejecute el primer comando como el usuario root, por ejemplo con `su` o `sudo`:
 
 ```
 pkg install py311-pip py311-cryptography
@@ -234,9 +234,9 @@ pkg install py311-pip py311-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. Luego cambia `python3.11` para que coincida.
+Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. A continuación, utilice el comando matching en lugar de `python3.11`, por ejemplo `python3.12`.
 
-OpenBSD. Ejecute el primer comando como el usuario root con `doas`:
+En OpenBSD, ejecute el primer comando como el usuario root con `doas`:
 
 ```
 doas pkg_add py3-pip py3-cryptography
@@ -246,7 +246,7 @@ doas pkg_add py3-pip py3-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-NetBSD. Ejecute el primer comando como el usuario root:
+En NetBSD, ejecute el primer comando como el usuario root:
 
 ```
 pkgin install py312-pip py312-cryptography
@@ -266,7 +266,7 @@ Para ejecutar el programa en FreeBSD, OpenBSD o NetBSD:
 
 ## Actualización
 
-Para actualizar el programa, descargar los dos scripts de nuevo. En Windows:
+Para actualizar el programa, descargue los dos scripts de nuevo. En Windows:
 
 ```
 curl.exe -L -o "$env:USERPROFILE\pdf-totals\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py; curl.exe -L -o "$env:USERPROFILE\pdf-totals\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -288,10 +288,10 @@ El archivo Excel no se puede guardar. El programa se detiene con código de reto
 
 Todos o muchos PDFs muestran `0 cantidades`. Ejecute diagnostico.py con uno de estos PDFs. Si el texto que muestra está vacío, el PDF es escaneado y el OCR no lo lee. Si el texto está ahí pero no se detecta nada, el programa no conoce las etiquetas ni el diseño del documento. El texto muestra qué palabras usa el documento. El mismo texto está en sin_resultado.log. Puedes añadir estas palabras a la configuración.
 
-Un total es demasiado grande. Busque el número de lote en detalle_lotes.txt. Este archivo muestra cada cantidad que se agregó y el PDF que vino de. Estas son causas comunes:
+Un total es demasiado grande. Busque el número de lote en detalle_lotes.txt. Este archivo muestra cada cantidad que se agregó y el nombre del PDF que lo contiene. Estas son causas comunes:
 
-- El programa eligió la columna de cantidad equivocada, porque el documento utiliza un título de columna que el programa no sabe.
-- El OCR leyó dos números que están unidos como un número.
+- El programa utilizó la columna equivocada para la cantidad, porque el documento utiliza un título de columna que el programa no sabe.
+- The OCR joined two numbers that are close together into one number.
 - El mismo PDF está en la carpeta dos veces.
 
 El OCR no se puede cargar en Windows, y el mensaje contiene `DLL load failed`. Instala el paquete msvc-runtime como se muestra en las instrucciones para Windows.

@@ -17,7 +17,7 @@ python diagnostico.py [-h] [--version] [--lineas N] PATH
 
 ## Beschreibung
 
-lotes_auto.py sucht den Ordner FOLDER und alle seine Unterordner nach Dateien, deren Name in .pdf endet. In jedem PDF findet es jede Chargennummer und die Anzahl der Stücke, die das Dokument für diesen Batch aufzeichnet. Es berechnet dann die Gesamtzahl der Teile jeder Charge über alle Dokumente und schreibt eine Zeile pro Charge in eine Excel-Arbeitsmappe. Wenn eine Charge in mehreren Dokumenten oder mehrmals in einem Dokument erscheint, werden ihre Mengen addiert.
+lotes_auto.py sucht den Ordner FOLDER und alle seine Unterordner nach Dateien, deren Name in .pdf endet. In jedem PDF findet es jede Chargennummer und die Anzahl der Stücke, die das Dokument für diese Charge aufzeichnet. Es berechnet dann die Gesamtzahl der Teile jeder Charge über alle Dokumente und schreibt eine Zeile pro Charge in eine Excel-Arbeitsmappe. Wenn eine Charge in mehreren Dokumenten oder mehrmals in einem Dokument erscheint, werden ihre Mengen addiert.
 
 Wenn ein PDF Text enthält, liest das Programm den Text direkt. Wenn eine Seite keinen Text enthält, behandelt das Programm die Seite als gescanntes Bild und liest es mit optischer Zeichenerkennung (OCR). Wenn keine OCR-Engine installiert ist, liest das Programm keine gescannten PDFs und listet sie zur manuellen Überprüfung auf.
 
@@ -29,15 +29,15 @@ diagnostico.py verwendet genau den gleichen Code wie lotes_auto.py, um Dokumente
 
 Das Programm erkennt vier Layouts. Es untersucht jede Seite in der hier angegebenen Reihenfolge und verwendet das erste Layout, das Ergebnisse für diese Seite erzeugt.
 
-1. Formulare, in denen jede Spalte ein Erzeugnis beschreibt. Eine Zeile hat ein Batch-Label wie `Lote` und enthält eine Batch-Nummer pro Spalte. Andere Zeilen haben eine Mengenbezeichnung wie `Cantidad Recibida` oder `Cantidad Facturada` und enthalten die Menge jedes Produkts in derselben Spalte. Wenn es mehrere Mengenreihen gibt, wählt das Programm eine nach der Priorität, die im Abschnitt Konfiguration beschrieben ist.
+1. Formulare, in denen jede Spalte ein Erzeugnis beschreibt. Eine Zeile hat eine Chargenbezeichnung wie `Lote` und enthält eine Chargennummer pro Spalte. Andere Zeilen haben eine Mengenbezeichnung wie `Cantidad Recibida` oder `Cantidad Facturada` und enthalten die Menge jedes Produkts in derselben Spalte. Wenn es mehrere Mengenreihen gibt, wählt das Programm eine nach der Priorität, die im Abschnitt Konfiguration beschrieben ist.
 
-2. Tabellen mit Spaltentiteln. Ein Spaltentitel wie `CANTIDAD`, `PIEZAS` oder `No. de piezas` markiert die Zahlenspalte, und das Programm liest die Werte darunter. Das Programm nimmt die Chargennummer aus einer Spalte mit einem Titel wie `LOTE`. Wenn es keine solche Spalte gibt, nimmt sie die Chargennummer von einer anderen Stelle in derselben Zeile, beispielsweise aus der Beschreibung, oder aus den nächsten beiden Zeilen. Ein Spaltentitel, der auf zwei Zeilen geschrieben ist, z. B. `PIEZAS` über `DEVUELTAS`, wird als ein Titel gelesen.
+2. Tabellen mit Spaltentiteln. Ein Spaltentitel wie `CANTIDAD`, `PIEZAS` oder `No. de piezas` markiert die Zahlenspalte, und das Programm liest die Werte darunter. Das Programm nimmt die Chargennummer aus einer Spalte mit einem Titel wie `LOTE`. Wenn es keine solche Spalte gibt, nimmt sie die Chargennummer von einer anderen Stelle in derselben Zeile, beispielsweise aus der Beschreibung oder aus den nächsten beiden Zeilen. Ein Spaltentitel, der auf zwei Zeilen geschrieben ist, z. B. `PIEZAS` über `DEVUELTAS`, wird als ein Titel gelesen.
 
-3. Linien mit Etiketten, bei denen die Charge an erster Stelle steht. Ein Beispiel ist eine Zeile `LOTE: 25240310` gefolgt von einer Zeile `CANTIDAD EN PIEZAS: 1,250`. Das Programm koppelt jede Charge mit der ersten Menge, die darauf folgt.
+3. Textzeilen mit Beschriftungen, in denen die Charge an erster Stelle steht. Ein Beispiel ist eine Zeile `LOTE: 25240310` gefolgt von einer Zeile `CANTIDAD EN PIEZAS: 1,250`. Das Programm koppelt jede Charge mit der ersten Menge, die darauf folgt.
 
-4. Linien mit Etiketten, bei denen die Menge an erster Stelle steht. Das Programm koppelt jede Menge mit der ersten Charge, die darauf folgt. Das erste Label im Dokument entscheidet, ob das Dokument Layout 3 oder Layout 4 verwendet.
+4. Textzeilen mit Etiketten, in denen die Menge an erster Stelle steht. Das Programm koppelt jede Menge mit der ersten Charge, die darauf folgt. Das erste Label im Dokument entscheidet, ob das Dokument Layout 3 oder Layout 4 verwendet.
 
-Diese Wörter werden als Batch-Etiketten erkannt: `lote`, `serie`, `serial`, `n/s` und `s/n`. Sie können mit `No.`, `Num.` oder `Numero` kombiniert werden.
+Diese Wörter werden als Chargenbezeichnungen erkannt: `lote`, `serie`, `serial`, `n/s` und `s/n`. Sie können mit `No.`, `Num.` oder `Numero` kombiniert werden.
 
 Diese Wörter werden als Mengenetiketten erkannt: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.` und `uds`.
 
@@ -50,8 +50,8 @@ Das Wort `unidad` allein markiert keine Menge, weil es die Maßeinheit benennt. 
 - Eine Chargennummer hat genau acht Stellen und beginnt mit `24`, `25` oder `26`. Das Programm ignoriert alle anderen Zahlen, zum Beispiel Preise, Beträge, Daten und Produktcodes. Wenn die OCR andere Zeichen an eine Chargennummer anhängt, z. B. einen vertikalen Balken, entfernt das Programm sie.
 - Das Programm liest Zahlen in mexikanischer Notation. Ein Komma trennt die Tausende und ein Punkt trennt die Dezimalzahlen. Zum Beispiel ist `1,250` eintausendzweihundertfünfzig, und `1,250.50` ist eintausendzweihundertfünfzigeinhalb.
 - Das Programm ignoriert Mengen, die Dezimalzahlen haben, und Mengen, die Null oder negativ sind, weil eine Anzahl von Stücken immer eine ganze Zahl ist. Diese Regel verhindert auch, dass Preise als Stücke gezählt werden.
-- Das Programm überspringt jede Datei, deren Name `FALTA REVISION` enthält. Kapital und kleine Briefe werden gleich behandelt, und das O kann einen Akzent haben. Übersprungene Dateien zählen nicht zu einer Gesamtsumme.
-- Wenn eine einzelne Zahl größer als `50,000` ist, fügt das Programm sie immer noch zur Summe hinzu. Wenn das Programm beendet ist, meldet es solche Mengen als verdächtig.
+- Das Programm überspringt jede Datei, deren Name `FALTA REVISION` enthält. Das Programm ignoriert den Unterschied zwischen Großbuchstaben und Kleinbuchstaben, und das O kann einen Akzent haben. Übersprungene Dateien zählen nicht zu einer Gesamtsumme.
+- Wenn eine einzelne Menge größer als `50,000` ist, fügt das Programm sie immer noch zur Summe hinzu. Wenn das Programm beendet ist, meldet es solche Mengen als verdächtig.
 
 ## Optionen
 
@@ -72,9 +72,9 @@ Optionen von diagnostico.py:
 
 lotes_auto.py schreibt die folgenden Dateien in den Ordner FOLDER. Es ersetzt bestehende Dateien mit den gleichen Namen. Wenn eine Datei leer wäre, löscht das Programm sie stattdessen.
 
-`totales_lotes.xlsx` enthält das Ergebnis. Es hat ein Blatt mit dem Namen `Lotes`. Das Blatt hat zwei Spalten, `Lote` und `Cantidad en Piezas`, und eine Zeile für jede Charge. Die Zeilen werden nach Chargennummer sortiert. Die Größen werden als Zahlen gespeichert und mit Zifferngruppierung, beispielsweise `1,406`, dargestellt.
+`totales_lotes.xlsx` enthält das Ergebnis. Es hat ein Blatt mit dem Namen `Lotes`. Das Blatt hat zwei Spalten, `Lote` und `Cantidad en Piezas`, und eine Zeile für jede Charge. Die Zeilen werden nach Chargennummer sortiert. Die Mengen werden als Zahlen gespeichert und mit Zifferngruppierung, beispielsweise `1,406`, dargestellt.
 
-`detalle_lotes.txt` listet jeden Betrag auf, der zu jedem Batch hinzugefügt wurde, zusammen mit dem Namen des PDF, das den Betrag enthält. Verwenden Sie diese Datei, um die Quelle einer Summe zu finden, die falsch aussieht.
+`detalle_lotes.txt` listet jeden Betrag auf, der zu jeder Charge hinzugefügt wurde, zusammen mit dem Namen des PDF, das den Betrag enthält. Verwenden Sie diese Datei, um die Quelle einer Summe zu finden, die falsch aussieht.
 
 `revisar_a_mano.txt` hat zwei Abschnitte. Der erste Abschnitt listet die Dateien auf, die übersprungen wurden, weil ihr Name `FALTA REVISION` enthält. Der zweite Abschnitt listet die PDFs auf, aus denen keine Menge gelesen werden konnte, jeweils mit dem Grund. Die möglichen Gründe sind: keine lesbaren Mengen; ein gescanntes PDF und keine OCR-Engine; ein Fehler beim Lesen der Datei.
 
@@ -84,8 +84,8 @@ lotes_auto.py schreibt die folgenden Dateien in den Ordner FOLDER. Es ersetzt be
 
 Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text nach dem Pfeil hat folgende Bedeutung:
 
-- `-> N cantidades (texto)` bedeutet, dass das Programm N Größen aus einem PDF liest, das Text enthält.
-- `-> N cantidades (OCR)` bedeutet, dass das Programm N Größen aus einem gescannten PDF gelesen hat.
+- `-> N cantidades (texto)` bedeutet, dass das Programm N Mengen aus einem PDF liest, das Text enthält.
+- `-> N cantidades (OCR)` bedeutet, dass das Programm N Mengen aus einem gescannten PDF gelesen hat.
 - `-> 0 cantidades` bedeutet, dass das Programm keine Menge gelesen hat. Die Datei sin_resultado.log zeigt den Text, den sie gelesen hat.
 - `-> omitido (FALTA REVISION)` bedeutet, dass das Programm die Datei aufgrund ihres Namens übersprungen hat.
 - `-> escaneado, OCR no disponible` bedeutet, dass das PDF gescannt wird und keine OCR-Engine installiert ist.
@@ -93,7 +93,7 @@ Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text n
 
 Am Ende zeigt das Programm die Anzahl der Chargen und Mengen und die Namen der Dateien, die es geschrieben hat. Wenn eine einzelne Menge größer als `50,000` ist, zeigt sie auch eine Liste dieser Mengen unter dem Titel `cantidades sospechosamente grandes` an.
 
-## Rückgabecodes
+## Rückgabewerte des Programms
 
 - `0` bedeutet, dass das Programm erfolgreich abgeschlossen wurde.
 - `1` bedeutet, dass das Programm die Excel-Datei nicht schreiben konnte. Normalerweise ist die Datei in Excel geöffnet.
@@ -105,13 +105,13 @@ Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können s
 
 `LOTE_WORDS` und `CANT_WORDS` sind reguläre Ausdrücke. Sie enthalten die Wörter, die Chargennummern und -mengen markieren.
 
-`PRIORIDAD_CANTIDAD` entscheidet, welche Menge Spalte oder Zeile verwendet wird, wenn ein Dokument mehrere hat. Das Programm verwendet das erste Wort in dieser Liste, das in einem Spaltentitel erscheint. Die Standardreihenfolge lautet `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Dies bedeutet, dass eine Spalte über Stücke oder über zurückgegebene Ware bevorzugt wird und dass eine fakturierte Menge nur verwendet wird, wenn keine andere Menge vorhanden ist.
+`PRIORIDAD_CANTIDAD` entscheidet, welche Menge Spalte oder Zeile verwendet wird, wenn ein Dokument mehrere hat. Das Programm verwendet das erste Wort in dieser Liste, das in einem Spaltentitel erscheint. Die Standardliste lautet `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Dies bedeutet, dass eine Spalte über Stücke oder über zurückgegebene Ware bevorzugt wird und dass eine fakturierte Menge nur verwendet wird, wenn keine andere Menge existiert.
 
 `AVISO_CANTIDAD_GRANDE` ist der Grenzwert, oberhalb dessen eine einzelne Menge als verdächtig gemeldet wird. Der Standardwert ist `50000`.
 
 `OMITIR_NOMBRE` ist das Muster für die Namen von Dateien, die übersprungen werden. Der Standardwert stimmt mit `FALTA REVISION` überein.
 
-`LOTE_ID` ist das Muster für eine gültige Chargennummer. Der Standardwert akzeptiert genau acht Ziffern, die mit `24`, `25` oder `26` beginnen. Um beispielsweise auch Batch-Nummern zu akzeptieren, die mit `27` beginnen, ändern Sie `2[456]` in `2[4567]`.
+`LOTE_ID` ist das Muster für eine gültige Chargennummer. Der Standardwert akzeptiert genau acht Ziffern, die mit `24`, `25` oder `26` beginnen. Um beispielsweise auch Chargennummern zu akzeptieren, die mit `27` beginnen, ändern Sie `2[456]` in `2[4567]`.
 
 ## Installation
 
@@ -119,8 +119,8 @@ Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können s
 
 Das Programm benötigt Python und die Python-Pakete pdfplumber und openpyxl. Um gescannte PDFs zu lesen, benötigt es auch eine OCR-Engine:
 
-- Mit `Python 3.12` oder einer älteren Version: das Paket rapidocr_onnxruntime. Dies ist der bevorzugte Motor.
-- Mit `Python 3.13` oder einer neueren Version: die Pakete rapidocr und onnxruntime. In einem Test hat dieser Motor eine Ziffer falsch gelesen, die der bevorzugte Motor richtig gelesen hat. Aus diesem Grund wird `Python 3.12` empfohlen, wenn Sie viele gescannte PDFs verarbeiten.
+- Mit `Python 3.12` oder einer älteren Version: das Paket rapidocr_onnxruntime. Dies ist die bevorzugte OCR-Engine.
+- Mit `Python 3.13` oder einer neueren Version: die Pakete rapidocr und onnxruntime. In einem Test hat diese OCR-Engine eine Ziffer falsch gelesen. Die bevorzugte OCR-Engine liest die gleiche Ziffer korrekt. Aus diesem Grund wird `Python 3.12` empfohlen, wenn Sie viele gescannte PDFs verarbeiten.
 
 Für FreeBSD, OpenBSD, NetBSD oder Alpine Linux ist keine OCR-Engine verfügbar. Auf diesen Systemen liest das Programm nur PDFs, die Text enthalten.
 
@@ -150,7 +150,7 @@ Diese Anweisungen sind für 64-Bit-Prozessoren von Intel und AMD. Verwenden Sie 
 
 ### macOS
 
-Sie benötigen Administratorrechte nur zur Installation von Python. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
+Sie benötigen nur Administratorrechte, um Python zu installieren. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -180,7 +180,7 @@ Um das Programm auszuführen:
 ~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
 ```
 
-In den folgenden Absätzen wird erläutert, wie Sie `Python 3.12` für gemeinsame Verteilungen erhalten.
+In den folgenden Absätzen wird erläutert, wie Sie `Python 3.12` in gängigen Linux-Distributionen erhalten.
 
 Debian 12 und Ubuntu 24.04 enthalten eine geeignete Version von Python. Installieren Sie das venv Modul und das curl Programm. Dies erfordert den root-Benutzer:
 
@@ -222,9 +222,9 @@ Wenn Ihr Alpine Linux-System `sudo` anstelle von `doas` verwendet, ersetzen Sie 
 
 Auf diesen Systemen liest das Programm nur PDFs, die Text enthalten. Die OCR-Engine ist für diese Systeme nicht verfügbar. Die PDF-Rendering-Bibliothek, die pdfplumber verwendet, ist ebenfalls nicht verfügbar, aber pdfplumber kann Text ohne sie lesen.
 
-Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, so dass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
+Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, sodass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
 
-FreeBSDFühren Sie den ersten Befehl als root Benutzer, beispielsweise mit `su` oder `sudo`:
+Führen Sie unter FreeBSD den ersten Befehl als root-Benutzer aus, beispielsweise mit `su` oder `sudo`:
 
 ```
 pkg install py311-pip py311-cryptography
@@ -234,9 +234,9 @@ pkg install py311-pip py311-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-Die Paketnamen enthalten die Version von Python, die in diesem Beispiel `311` ist. Wenn Ihr System eine andere Version verwendet, finden Sie die richtigen Namen mit dem Befehl `pkg search cryptography`. Ändern Sie dann `python3.11` in Übereinstimmung.
+Die Paketnamen enthalten die Version von Python, die in diesem Beispiel `311` ist. Wenn Ihr System eine andere Version verwendet, finden Sie die richtigen Namen mit dem Befehl `pkg search cryptography`. Verwenden Sie dann den Matching-Befehl anstelle von `python3.11`, zum Beispiel `python3.12`.
 
-OpenBSDFühren Sie den ersten Befehl als root Benutzer mit `doas`:
+Führen Sie auf OpenBSD den ersten Befehl als root-Benutzer mit `doas` aus:
 
 ```
 doas pkg_add py3-pip py3-cryptography
@@ -246,7 +246,7 @@ doas pkg_add py3-pip py3-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-NetBSD. Führen Sie den ersten Befehl als root-Benutzer aus:
+Führen Sie auf NetBSD den ersten Befehl als root-Benutzer aus:
 
 ```
 pkgin install py312-pip py312-cryptography
@@ -288,10 +288,10 @@ Die Excel-Datei kann nicht gespeichert werden. Das Programm endet mit dem Rückg
 
 Alle oder viele PDFs zeigen `0 cantidades`. Führen Sie diagnostico.py mit einem dieser PDFs aus. Wenn der angezeigte Text leer ist, wird das PDF gescannt und die OCR liest es nicht. Wenn der Text vorhanden ist, aber nichts erkannt wird, kennt das Programm die Beschriftungen oder das Layout des Dokuments nicht. Der Text zeigt, welche Wörter das Dokument verwendet. Der gleiche Text ist in sin_resultado.log. Sie können diese Wörter zur Konfiguration hinzufügen.
 
-Eine Summe ist viel zu groß. Suchen Sie nach der Chargennummer in detalle_lotes.txt. Diese Datei zeigt jeden Betrag, der hinzugefügt wurde, und das PDF, aus dem es stammt. Dies sind häufige Ursachen:
+Eine Summe ist viel zu groß. Suchen Sie nach der Chargennummer in detalle_lotes.txt. Diese Datei zeigt jeden Betrag, der hinzugefügt wurde, und den Namen der PDF, die es enthält. Dies sind häufige Ursachen:
 
-- Das Programm wählte die Spalte mit der falschen Anzahl, da das Dokument einen Spaltentitel verwendet, den das Programm nicht kennt.
-- Die OCR liest zwei Zahlen, die als eine Zahl nahe beieinander liegen.
+- Das Programm verwendete die falsche Spalte für die Menge, da das Dokument einen Spaltentitel verwendet, den das Programm nicht kennt.
+- Die OCR verknüpfte zwei Zahlen, die nahe beieinander liegen, zu einer Zahl.
 - Das gleiche PDF befindet sich zweimal im Ordner.
 
 Die OCR kann unter Windows nicht geladen werden, und die Nachricht enthält `DLL load failed`. Installieren Sie das Paket msvc-runtime wie in den Anweisungen für Windows gezeigt.
@@ -306,7 +306,7 @@ Die OCR liest handschriftliche Zahlen, wenn sie klar geschrieben sind. Es liest 
 
 Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan verschwommen oder gekippt ist. Vergleichen Sie einige Summen aus gescannten PDFs mit detalle_lotes.txt.
 
-Das Format einer Chargennummer wird durch `LOTE_ID` festgelegt. Das Programm ignoriert Batchnummern in anderen Formaten, bis das Muster geändert wird.
+Das Format einer Chargennummer wird durch `LOTE_ID` festgelegt. Das Programm ignoriert Chargennummern in anderen Formaten, bis das Muster geändert wird.
 
 Das Programm erwartet, dass Mengen ganze Stückzahlen sind. Es konvertiert keine Dokumente, die Boxen oder andere Einheiten zählen.
 

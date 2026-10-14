@@ -17,6 +17,8 @@ CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
 # cantidad (Recibida, Facturada...). Se usa el primero de esta lista que tenga numeros:
 PRIORIDAD_CANTIDAD = ["pieza", "devuel", "recibid", "cantidad", "factur"]
 # PDFs cuyo nombre contiene esto se omiten (no cuentan en el total):
+# Una sola cantidad mayor a esto se avisa en pantalla como sospechosa (igual se suma):
+AVISO_CANTIDAD_GRANDE = 50000
 OMITIR_NOMBRE = re.compile(r"falta[\s_\-]*revisi[oó]n", re.I)
 # =====================================================
 
@@ -295,6 +297,8 @@ totals = {}
 n_total = 0
 sin_resultado = []
 omitidos = []
+detalle = {}        # lote -> [(archivo, cantidad)]
+grandes = []
 for n, pdf in enumerate(pdfs, 1):
     name = str(pdf.relative_to(folder))
     print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
@@ -320,6 +324,9 @@ for n, pdf in enumerate(pdfs, 1):
         found = [(l, v) for l, v in found if l and float(v).is_integer() and v > 0]
         for lote, v in found:
             totals[lote] = totals.get(lote, 0) + v
+            detalle.setdefault(lote, []).append((name, v))
+            if v > AVISO_CANTIDAD_GRANDE:
+                grandes.append((name, lote, v))
         n_total += len(found)
         print(f"  -> {len(found)} cantidades ({fuente})")
         if not found:
@@ -366,4 +373,18 @@ if omitidos or sin_resultado:
     print(f"Lista: {rev}")
 elif (folder / "revisar_a_mano.txt").exists():
     (folder / "revisar_a_mano.txt").unlink()
+# Detalle: de que PDF salio cada cantidad de cada lote
+det = folder / "detalle_lotes.txt"
+lines = []
+for lote in sorted(detalle, key=sort_key):
+    lines.append(f"{lote}   TOTAL = {fmt(totals[lote]):,}")
+    for nm, v in detalle[lote]:
+        lines.append(f"      {fmt(v):>10,}   {nm}")
+    lines.append("")
+det.write_text("\n".join(lines), encoding="utf-8")
+if grandes:
+    print(f"\n*** {len(grandes)} cantidades sospechosamente grandes (> {AVISO_CANTIDAD_GRANDE:,}), revisalas:")
+    for nm, lote, v in grandes:
+        print(f"   {fmt(v):>12,}  lote {lote}  en  {nm}")
+print(f"Detalle por lote: {det}")
 print(f"Excel: {out}")

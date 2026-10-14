@@ -16,6 +16,8 @@ CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
 # En formatos "de lado" (cada columna es un producto) puede haber varios renglones de
 # cantidad (Recibida, Facturada...). Se usa el primero de esta lista que tenga numeros:
 PRIORIDAD_CANTIDAD = ["pieza", "devuel", "recibid", "cantidad", "factur"]
+# PDFs cuyo nombre contiene esto se omiten (no cuentan en el total):
+OMITIR_NOMBRE = re.compile(r"falta[\s_\-]*revisi[oó]n", re.I)
 # =====================================================
 
 # El OCR a veces quita espacios ("CANTIDADENPIEZAS:1,250"), por eso no se exigen.
@@ -246,9 +248,14 @@ print(f"{len(pdfs)} PDFs encontrados en {folder}")
 totals = {}
 n_total = 0
 sin_resultado = []
+omitidos = []
 for n, pdf in enumerate(pdfs, 1):
     name = str(pdf.relative_to(folder))
     print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
+    if OMITIR_NOMBRE.search(pdf.name):
+        omitidos.append(name)
+        print("  -> omitido (FALTA REVISION)")
+        continue
     try:
         found, ev, leidas, fuente = [], [], [], ""
         with pdfplumber.open(pdf) as doc:
@@ -299,10 +306,15 @@ except PermissionError:
     sys.exit(1)
 
 print(f"\n{len(totals)} lotes | {n_total} cantidades leidas")
-if sin_resultado:
+if omitidos or sin_resultado:
     rev = folder / "revisar_a_mano.txt"
-    rev.write_text("\n".join(sin_resultado), encoding="utf-8")
-    print(f"{len(sin_resultado)} PDFs sin cantidades legibles (lista en {rev.name}):")
-    for nm in sin_resultado:
-        print("   - " + nm)
+    txt = [f"PDFs YA MARCADOS 'FALTA REVISION' (omitidos, no cuentan en el total): {len(omitidos)}"]
+    txt += ["   " + nm for nm in omitidos]
+    txt += ["", f"PDFs SIN CANTIDADES LEGIBLES (revisar a mano): {len(sin_resultado)}"]
+    txt += ["   " + nm for nm in sin_resultado]
+    rev.write_text("\n".join(txt), encoding="utf-8")
+    print(f"{len(omitidos)} omitidos por FALTA REVISION | {len(sin_resultado)} sin cantidades legibles")
+    print(f"Lista: {rev}")
+elif (folder / "revisar_a_mano.txt").exists():
+    (folder / "revisar_a_mano.txt").unlink()
 print(f"Excel: {out}")

@@ -31,9 +31,9 @@ The program recognizes four layouts. It examines each page in the order given he
 
 2. Tables with column titles. A column title such as `CANTIDAD`, `PIEZAS` or `No. de piezas` marks the quantity column, and the program reads the values below it. The program takes the batch number from a column with a title such as `LOTE`. If there is no such column, it takes the batch number from any other place in the same row, for example from the description, or from the next two rows. A column title that is written on two lines, such as `PIEZAS` above `DEVUELTAS`, is read as one title.
 
-3. Lines with labels, in which the batch comes first. An example is a line `LOTE: 25240310` followed by a line `CANTIDAD EN PIEZAS: 1,250`. The program pairs each batch with the first quantity that follows it.
+3. Text lines with labels, in which the batch comes first. An example is a line `LOTE: 25240310` followed by a line `CANTIDAD EN PIEZAS: 1,250`. The program pairs each batch with the first quantity that follows it.
 
-4. Lines with labels, in which the quantity comes first. The program pairs each quantity with the first batch that follows it. The first label in the document decides whether the document uses layout 3 or layout 4.
+4. Text lines with labels, in which the quantity comes first. The program pairs each quantity with the first batch that follows it. The first label in the document decides whether the document uses layout 3 or layout 4.
 
 These words are recognized as batch labels: `lote`, `serie`, `serial`, `n/s` and `s/n`. They may be combined with `No.`, `Num.` or `Numero`.
 
@@ -48,7 +48,7 @@ The word `unidad` alone does not mark a quantity, because it names the unit of m
 - A batch number has exactly eight digits and starts with `24`, `25` or `26`. The program ignores all other numbers, for example prices, amounts, dates and product codes. If the OCR attaches other characters to a batch number, such as a vertical bar, the program removes them.
 - The program reads numbers in Mexican notation. A comma separates the thousands and a point separates the decimals. For example, `1,250` is one thousand two hundred and fifty, and `1,250.50` is one thousand two hundred and fifty and a half.
 - The program ignores quantities that have decimals, and quantities that are zero or negative, because a number of pieces is always a whole number. This rule also prevents prices from being counted as pieces.
-- The program skips every file whose name contains `FALTA REVISION`. Capital and small letters are treated alike, and the O may have an accent. Skipped files do not count towards any total.
+- The program skips every file whose name contains `FALTA REVISION`. The program ignores the difference between upper case and lower case, and the O may have an accent. Skipped files do not count towards any total.
 - If a single quantity is greater than `50,000`, the program still adds it to the total. When the program finishes, it reports such quantities as suspicious.
 
 ## Options
@@ -91,7 +91,7 @@ While it runs, lotes_auto.py shows one line for each PDF. The text after the arr
 
 At the end, the program shows the number of batches and quantities and the names of the files that it wrote. If a single quantity is greater than `50,000`, it also shows a list of these quantities under the title `cantidades sospechosamente grandes`.
 
-## Return codes
+## Return values of the program
 
 - `0` means that the program finished successfully.
 - `1` means that the program could not write the Excel file. Usually the file is open in Excel.
@@ -103,7 +103,7 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 
 `LOTE_WORDS` and `CANT_WORDS` are regular expressions. They contain the words that mark batch numbers and quantities.
 
-`PRIORIDAD_CANTIDAD` decides which quantity column or row is used when a document has several. The program uses the first word in this list that appears in a column title. The default order is `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. This means that a column about pieces or about returned goods is preferred, and that an invoiced quantity is used only if no other quantity exists.
+`PRIORIDAD_CANTIDAD` decides which quantity column or row is used when a document has several. The program uses the first word in this list that appears in a column title. The default list is `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. This means that a column about pieces or about returned goods is preferred, and that an invoiced quantity is used only if no other quantity exists.
 
 `AVISO_CANTIDAD_GRANDE` is the limit above which a single quantity is reported as suspicious. The default value is `50000`.
 
@@ -117,8 +117,8 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 
 The program needs Python and the Python packages pdfplumber and openpyxl. To read scanned PDFs, it also needs an OCR engine:
 
-- With `Python 3.12` or an older version: the package rapidocr_onnxruntime. This is the preferred engine.
-- With `Python 3.13` or a newer version: the packages rapidocr and onnxruntime. In a test, this engine read one digit wrongly that the preferred engine read correctly. For this reason, `Python 3.12` is recommended if you process many scanned PDFs.
+- With `Python 3.12` or an older version: the package rapidocr_onnxruntime. This is the preferred OCR engine.
+- With `Python 3.13` or a newer version: the packages rapidocr and onnxruntime. In a test, this OCR engine read one digit wrongly. The preferred OCR engine read the same digit correctly. For this reason, `Python 3.12` is recommended if you process many scanned PDFs.
 
 No OCR engine is available for FreeBSD, OpenBSD, NetBSD or Alpine Linux. On these systems, the program reads only PDFs that contain text.
 
@@ -178,7 +178,7 @@ To run the program:
 ~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
 ```
 
-The following paragraphs explain how to get `Python 3.12` on common distributions.
+The following paragraphs explain how to get `Python 3.12` on common Linux distributions.
 
 Debian 12 and Ubuntu 24.04 include a suitable version of Python. Install the venv module and the curl program. This needs the root user:
 
@@ -222,7 +222,7 @@ On these systems, the program reads only PDFs that contain text. The OCR engine 
 
 The package pdfminer.six needs the package cryptography. A Rust compiler is needed to build cryptography from source code, so cryptography is installed from the packages of the system. All other packages are written in pure Python. They are installed without their optional dependencies.
 
-FreeBSD. Run the first command as the root user, for example with `su` or `sudo`:
+On FreeBSD, run the first command as the root user, for example with `su` or `sudo`:
 
 ```
 pkg install py311-pip py311-cryptography
@@ -232,9 +232,9 @@ pkg install py311-pip py311-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-The package names contain the version of Python, which is `311` in this example. If your system uses another version, find the correct names with the command `pkg search cryptography`. Then change `python3.11` to match.
+The package names contain the version of Python, which is `311` in this example. If your system uses another version, find the correct names with the command `pkg search cryptography`. Then use the matching command instead of `python3.11`, for example `python3.12`.
 
-OpenBSD. Run the first command as the root user with `doas`:
+On OpenBSD, run the first command as the root user with `doas`:
 
 ```
 doas pkg_add py3-pip py3-cryptography
@@ -244,7 +244,7 @@ doas pkg_add py3-pip py3-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-NetBSD. Run the first command as the root user:
+On NetBSD, run the first command as the root user:
 
 ```
 pkgin install py312-pip py312-cryptography
@@ -286,10 +286,10 @@ The Excel file cannot be saved. The program stops with return code 1 when totale
 
 All or many PDFs show `0 cantidades`. Run diagnostico.py with one of these PDFs. If the text that it shows is empty, the PDF is scanned and the OCR does not read it. If the text is there but nothing is detected, the program does not know the labels or the layout of the document. The text shows which words the document uses. The same text is in sin_resultado.log. You can add these words to the configuration.
 
-A total is much too large. Search for the batch number in detalle_lotes.txt. This file shows every amount that was added and the PDF that it came from. These are common causes:
+A total is much too large. Search for the batch number in detalle_lotes.txt. This file shows every amount that was added and the name of the PDF that contains it. These are common causes:
 
-- The program chose the wrong quantity column, because the document uses a column title that the program does not know.
-- The OCR read two numbers that are close together as one number.
+- The program used the wrong column for the quantity, because the document uses a column title that the program does not know.
+- The OCR joined two numbers that are close together into one number.
 - The same PDF is in the folder twice.
 
 The OCR cannot be loaded on Windows, and the message contains `DLL load failed`. Install the package msvc-runtime as shown in the instructions for Windows.

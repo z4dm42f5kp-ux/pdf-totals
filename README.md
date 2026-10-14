@@ -40,7 +40,7 @@ mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/
 
 The manual describes the installation on other Linux distributions and on FreeBSD, OpenBSD and NetBSD.
 
-## Usage
+## How to use the program
 
 Windows:
 
@@ -57,7 +57,7 @@ macOS, Linux, FreeBSD, OpenBSD and NetBSD:
 The program also searches all subfolders. It skips every file whose name contains `FALTA REVISION`. When the program finishes, the folder contains these files:
 
 - totales_lotes.xlsx contains one row for each batch with the total number of pieces.
-- detalle_lotes.txt lists every amount that was added to each batch and the PDF that it came from.
+- detalle_lotes.txt lists every amount that was added to each batch and the name of the PDF that contains it.
 - revisar_a_mano.txt lists the skipped PDFs and the PDFs from which no quantity could be read.
 - sin_resultado.log contains the text that was read from each PDF that produced no quantity.
 

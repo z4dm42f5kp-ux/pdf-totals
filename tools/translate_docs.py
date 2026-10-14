@@ -44,6 +44,32 @@ PROTECT = re.compile(r"`[^`]+`|\[[^\]]*\]\([^)]+\)|https?://\S+"
                      r"|(?<![\w-])(?:" + "|".join(re.escape(n) for n in NAMES) + r")(?![\w-])")
 
 
+# Terminology corrections applied after machine translation. The English word "batch"
+# is sometimes left untranslated in German; the correct pharmaceutical term is "Charge".
+GLOSSARY = {
+    "de": [
+        (r"\bBatch-Nummer(n?)\b", r"Chargennummer\1"),
+        (r"\bBatchnummer(n?)\b", r"Chargennummer\1"),
+        (r"\bein Batch-Label\b", "eine Chargenbezeichnung"),
+        (r"\bBatch-Label(s?)\b", "Chargenbezeichnung"),
+        (r"\bBatch-Etiketten\b", r"Chargenbezeichnungen"),
+        (r"\b(jeden|diesen|einen) Batch\b", lambda m: {"jeden": "jede", "diesen": "diese", "einen": "eine"}[m.group(1)] + " Charge"),
+        (r"\b(dem|jedem) Batch\b", lambda m: {"dem": "der", "jedem": "jeder"}[m.group(1)] + " Charge"),
+        (r"\b(der|den) Batch\b", "die Charge"),
+        (r"\bBatches\b", "Chargen"),
+        (r"\bBatch\b", "Charge"),
+        (r"\bGrößen\b", "Mengen"),
+    ],
+    "es": [],
+}
+
+
+def apply_glossary(text, lang):
+    for pattern, repl in GLOSSARY.get(lang, []):
+        text = re.sub(pattern, repl, text)
+    return text
+
+
 def ensure_models():
     argostranslate.package.update_package_index()
     available = argostranslate.package.get_available_packages()
@@ -96,7 +122,7 @@ def translate_markdown(src, lang):
         else:
             m = re.match(r"(#+ |- |\d+\. )?(.*)", line)
             prefix, body = m.group(1) or "", m.group(2)
-            out.append(prefix + translate_text(body, lang))
+            out.append(prefix + apply_glossary(translate_text(body, lang), lang))
         if len(out) == 1 and out[0].startswith("# "):
             out += ["", translate_text(NOTICE, lang)]
     return "\n".join(out) + "\n"

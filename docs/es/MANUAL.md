@@ -4,7 +4,7 @@ Este archivo se tradujo automáticamente del original inglés con Argos Translat
 
 ## Nombre
 
-lotes_auto.py - agregar el número de piezas por lote encontrado en una carpeta de documentos PDF
+lotes_auto.py - agregar el número de piezas por número de lote encontrado en una carpeta de documentos PDF
 
 diagnostico.py - mostrar lo que lotes_auto.py lee y detecta en uno o más documentos PDF
 
@@ -17,11 +17,11 @@ python diagnostico.py [-h] [--version] [--lineas N] PATH
 
 ## Descripción
 
-lotes_auto.py busca FOLDER y todos sus subcarpetas para archivos que terminan en .pdf. Desde cada PDF lee cada número de lote y el número de piezas grabadas para ese lote. Luego agrega las piezas de cada lote sobre todos los documentos y escribe una fila por lote a un libro de trabajo de Excel. Muchos que aparecen en varios documentos, o varias veces en un documento, se agregan juntos.
+lotes_auto.py busca FOLDER y todos sus subcarpetas para archivos que terminan en .pdf. Desde cada PDF lee cada número de lote y el número de piezas grabadas para ese lote. Luego agrega las piezas de cada lote sobre todos los documentos y escribe una fila por lote a un libro de trabajo de Excel. Los lotes que aparecen en varios documentos, o varias veces en un documento, se agregan juntos.
 
 El texto de un PDF se lee directamente cuando el PDF contiene texto. Cuando una página no contiene texto, se trata como imagen escaneada y se lee con reconocimiento de caracteres ópticos (OCR). Si no se instala ningún motor OCR, los PDF escaneados no se leen y se enumeran para revisión manual.
 
-El programa fue escrito para documentos de retorno farmacéutico mexicano. Todos los mensajes y archivos de salida están en español; su significado se explica en este manual.
+El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Todos los mensajes y archivos de salida están en español; su significado se explica en este manual.
 
 diagnostico.py utiliza exactamente el mismo código de lectura y detección que lotes_auto.py. Imprimen el texto que fue leído en cada PDF, lo que se detectó en él y el resultado, para que se pueda examinar un PDF que no se lea correctamente. No escribe ningún archivo.
 
@@ -29,7 +29,7 @@ diagnostico.py utiliza exactamente el mismo código de lectura y detección que 
 
 El programa reconoce cuatro diseños. Cada página se examina en el orden dado aquí, y el primer diseño que produce resultados se utiliza para esa página.
 
-1. Formas en las que cada columna es un producto. Una fila etiquetada con mucha palabra, como `Lote`, contiene un número de lote por columna. Otras filas, etiquetadas por ejemplo `Cantidad Recibida` o `Cantidad Facturada`, contienen la cantidad de cada producto en la misma columna. Si existen varias filas de cantidad, la fila es elegida por la prioridad descrita bajo Configuración.
+1. Formas en las que cada columna es un producto. Una fila etiquetada con una palabra de lote, como `Lote`, contiene un número de lote por columna. Otras filas, etiquetadas por ejemplo `Cantidad Recibida` o `Cantidad Facturada`, contienen la cantidad de cada producto en la misma columna. Si existen varias filas de cantidad, la fila es elegida por la prioridad descrita bajo Configuración.
 
 2. Tablas con una fila encabezada. Un encabezamiento como `CANTIDAD`, `PIEZAS` o `No. de piezas` marca la columna de cantidad, y los valores debajo de ella se leen. El número de lote se toma de un título como `LOTE` cuando está presente, de otro modo desde cualquier lugar en la misma fila, por ejemplo dentro de la descripción, o desde las dos filas siguientes. Los encabezados que abarcan dos líneas, como `PIEZAS` por encima de `DEVUELTAS`, se leen como una partida.
 
@@ -37,34 +37,30 @@ El programa reconoce cuatro diseños. Cada página se examina en el orden dado a
 
 4. Líneas etiquetadas en las que la cantidad viene primero. Cada cantidad se combina con el primer lote que lo sigue. Si un documento utiliza el diseño 3 o el diseño 4 se decide por su primera etiqueta.
 
-Palabras reconocidas como etiquetas de lote: `lote`, `serie`, `serial`, `n/s`, `s/n`, precedida opcionalmente o seguida por `No.`, `Num.` o `Numero`. Palabras reconocidas como etiquetas de cantidad: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Las palabras reconocidas como títulos de cantidad en tablas también incluyen `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` y `viales`. La palabra `unidad` sola no es una cantidad, porque nombra la unidad de medida. `Cajas` nunca se utiliza, porque cuenta cajas, no piezas.
+Palabras reconocidas como etiquetas por lotes: `lote`, `serie`, `serial`, `n/s`, `s/n`, precedida opcionalmente o seguida por `No.`, `Num.` o `Numero`. Palabras reconocidas como etiquetas de cantidad: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Las palabras reconocidas como títulos de cantidad en tablas también incluyen `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` y `viales`. La palabra `unidad` sola no es una cantidad, porque nombra la unidad de medida. `Cajas` nunca se utiliza, porque cuenta cajas, no piezas.
 
 ## Reglas aplicadas a cada valor
 
-- Mucho número debe consistir de exactamente ocho dígitos y empezar con 24, 25 o 26. Cualquier otra cosa es ignorada, incluyendo precios, cantidades, fechas y códigos de producto. Los caracteres adjuntos a un gran número por el OCR, como una barra vertical, se eliminan.
-- Números se leen en notación mexicana: 1.250 es mil doscientos cincuenta, y 1.250,50 es mil doscientos cincuenta y medio.
+- Un número de lote debe consistir de exactamente ocho dígitos y comenzar con `24`, `25` o `26`. Cualquier otra cosa es ignorada, incluyendo precios, cantidades, fechas y códigos de producto. Los caracteres adjuntos a un número de lotes por el OCR, como una barra vertical, se eliminan.
+- Los números se leen en notación mexicana, con una coma como el separador de miles y un punto como el separador decimal: `1,250` es mil doscientos cincuenta, y `1,250.50` es mil doscientos cincuenta y medio.
 - Se ignoran cuantitativas con decimales, y cantidades que son cero o negativos, porque las piezas son números enteros. Esto también impide que los precios sean contados como piezas.
 - Los archivos cuyo nombre contiene `FALTA REVISION`, en mayúscula o inferior y con o sin acento en el O, se saltan y no cuentan hacia ningún total.
-- Todavía se añade una cantidad única superior a 50.000, pero se informa al final de la carrera como sospechosa.
+- Todavía se añade una cantidad única mayor que `50,000`, pero se informa al final de la carrera como sospechosa.
 
 ## Opciones
 
-lotes_auto.py:
+Opciones de lotes_auto.py:
 
-```
-FOLDER       folder that contains the PDF files; subfolders are included
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `FOLDER`: la carpeta que contiene los archivos PDF. Se incluyen subcarpetas.
+- `--version`: imprimir el número de versión y la salida.
+- `-h`, `--help`: imprimir un mensaje de uso corto y salida.
 
-diagnostico.py:
+Opciones de diagnostico.py:
 
-```
-PATH         a single PDF file, or a folder whose PDF files are all examined
---lineas N   show at most N lines of text per PDF; the default is 40
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `PATH`: un solo archivo PDF, o una carpeta cuyos archivos PDF son examinados.
+- `--lineas N`: mostrar en la mayoría de las líneas N de texto por PDF. El defecto es 40.
+- `--version`: imprimir el número de versión y la salida.
+- `-h`, `--help`: imprimir un mensaje de uso corto y salida.
 
 ## Archivo de salida
 
@@ -72,7 +68,7 @@ lotes_auto.py escribe los siguientes archivos en FOLDER. Los archivos existentes
 
 `totales_lotes.xlsx` es el resultado. Tiene una hoja llamada `Lotes` con dos columnas, `Lote` y `Cantidad en Piezas`, una fila por lote, ordenados por número de lote. Las cantidades se almacenan como números y se muestran con miles de separadores.
 
-`detalle_lotes.txt` lista, por cada lote, cada cantidad que se agregó a ella y el PDF que la cantidad vino de. Úsalo para encontrar la fuente de un total que se ve mal.
+`detalle_lotes.txt` lista, para cada lote, cada cantidad que se agregó a él y el PDF de que la cantidad vino. Úsalo para encontrar la fuente de un total que se ve mal.
 
 `revisar_a_mano.txt` tiene dos secciones. La primera lista de los archivos que fueron saltados porque su nombre contiene `FALTA REVISION`. La segunda enumera los PDFs de los que no se puede leer ninguna cantidad, cada uno con la razón: no hay cantidades legibles, escaneadas sin OCR disponible, o un error al leer el archivo.
 
@@ -82,30 +78,26 @@ lotes_auto.py escribe los siguientes archivos en FOLDER. Los archivos existentes
 
 Mientras funciona, lotes_auto.py imprime una línea por PDF. El mensaje después de la flecha tiene el siguiente significado:
 
-```
--> N cantidades (texto)                 N quantities were read from a PDF that contains text
--> N cantidades (OCR)                   N quantities were read from a scanned PDF
--> 0 cantidades (...)                   nothing was read; see sin_resultado.log
--> omitido (FALTA REVISION)             the file was skipped because of its name
--> escaneado, OCR no disponible         a scanned PDF could not be read because OCR is missing
--> ERROR: ...                           the file could not be opened or read
-```
+- `-> N cantidades (texto)`: Se leyeron cantidades N de un PDF que contiene texto.
+- `-> N cantidades (OCR)`: Se leyeron cantidades N de un PDF escaneado.
+- `-> 0 cantidades`No se leía nada. See sin_resultado.log.
+- `-> omitido (FALTA REVISION)`: el archivo fue saltado debido a su nombre.
+- `-> escaneado, OCR no disponible`: un PDF escaneado no se puede leer porque ningún motor OCR está instalado.
+- `-> ERROR`: el archivo no se puede abrir ni leer.
 
-Al final imprime el número de lotes y cantidades, los nombres de los archivos que escribió, y, si cualquier cantidad es mayor de 50.000, una lista de esas cantidades encabezadas por `cantidades sospechosamente grandes`.
+Al final imprime el número de lotes y cantidades, los nombres de los archivos que escribió, y, si cualquier cantidad es mayor que `50,000`, una lista de esas cantidades encabezadas por `cantidades sospechosamente grandes`.
 
 ## Situación de salida
 
-```
-0   success
-1   the Excel file could not be written, usually because it is open in Excel
-2   invalid arguments, or FOLDER does not exist
-```
+- `0`: éxito.
+- `1`: el archivo Excel no puede ser escrito, generalmente porque está abierto en Excel.
+- `2`: argumentos inválidos, o la carpeta no existe.
 
 ## Configuración
 
 Los ajustes están en la parte superior de lotes_auto.py. Editarlos con cualquier editor de texto y guardar el archivo en la codificación UTF-8.
 
-`LOTE_WORDS` y `CANT_WORDS` son expresiones regulares con las palabras que etiquetan números y cantidades.
+`LOTE_WORDS` y `CANT_WORDS` son expresiones regulares con las palabras que etiquetan números y cantidades de lote.
 
 `PRIORIDAD_CANTIDAD` decide qué columna de cantidad o fila se utiliza cuando un documento tiene varios. La primera palabra en la lista que aparece en una partida gana. El pedido predeterminado es `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`; es decir, se prefiere una columna sobre piezas o bienes devueltos, y una cantidad facturada se utiliza sólo como último recurso.
 
@@ -113,7 +105,7 @@ Los ajustes están en la parte superior de lotes_auto.py. Editarlos con cualquie
 
 `OMITIR_NOMBRE` es el patrón de nombres de archivos que se saltan. El predeterminado coincide con `FALTA REVISION`.
 
-`LOTE_ID` es el patrón de un número de lote válido. El predeterminado acepta exactamente ocho dígitos comenzando con 24, 25 o 26. Para aceptar, por ejemplo, lotes comenzando con 27 también, cambiar `2[456]` a `2[4567]`.
+`LOTE_ID` es el patrón de un número de lote válido. El predeterminado acepta exactamente ocho dígitos comenzando con `24`, `25` o `26`. Para aceptar, por ejemplo, lotes comenzando con 27 también, cambiar `2[456]` a `2[4567]`.
 
 ## Instalación
 
@@ -300,20 +292,18 @@ Los números manuscritos son leídos por el OCR cuando están escritos clarament
 
 El OCR puede ocasionalmente malinterpretar un dígito, en particular en los escaneos borrosos o segados. Los totales obtenidos de los PDF escaneados deben ser revisados con detalle_lotes.txt.
 
-El formato de número de lote es fijado por `LOTE_ID`. Los documentos que usan otro formato son ignorados hasta que el patrón sea cambiado.
+El formato número de lote es fijado por `LOTE_ID`. Los documentos que usan otro formato son ignorados hasta que el patrón sea cambiado.
 
 Se espera que las cantidades sean un número entero de piezas. Los documentos que cuentan cajas u otras unidades no se convierten.
 
 ## Archivos
 
-```
-lotes_auto.py      the program
-diagnostico.py     the diagnostic tool; must be in the same folder as lotes_auto.py
-README.md          short description (also README.de.md and README.es.md)
-docs/              this manual in English, German and Spanish
-tools/             the script that translates the documentation
-LICENSE            license text
-```
+- lotes_auto.py: el programa.
+- diagnostico.py: la herramienta de diagnóstico. Debe estar en la misma carpeta que lotes_auto.py.
+- README.md: una descripción corta, también disponible como README.de.md y README.es.md.
+- `docs/`: este manual en inglés, alemán y español.
+- `tools/translate_docs.py`: el script que traduce la documentación.
+- `LICENSE`: el texto de la licencia.
 
 ## Licencia
 

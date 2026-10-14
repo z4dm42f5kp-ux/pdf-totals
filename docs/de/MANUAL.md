@@ -4,7 +4,7 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 ## Name
 
-lotes_auto.py - Addieren Sie die Anzahl der Teile pro Losnummer in einem Ordner mit PDF-Dokumenten
+lotes_auto.py - Addieren Sie die Anzahl der Stücke pro Chargennummer in einem Ordner von PDF-Dokumenten
 
 diagnostico.py - zeigen, was lotes_auto.py in einem oder mehreren PDF-Dokumenten liest und erkennt
 
@@ -17,11 +17,11 @@ python diagnostico.py [-h] [--version] [--lineas N] PATH
 
 ## Beschreibung
 
-lotes_auto.py sucht FOLDER und alle seine Unterordner nach Dateien, die in .pdf enden. Aus jedem PDF liest es jede Losnummer und die Anzahl der Stücke, die für dieses Los aufgezeichnet wurden. Es addiert dann die Teile jedes Lots über alle Dokumente und schreibt eine Zeile pro Lot in eine Excel-Arbeitsmappe. Lots, die in mehreren Dokumenten oder mehrmals in einem Dokument erscheinen, werden addiert.
+lotes_auto.py sucht FOLDER und alle seine Unterordner nach Dateien, die in .pdf enden. Aus jedem PDF liest es jede Chargennummer und die Anzahl der Stücke, die für diese Charge aufgezeichnet wurden. Es addiert dann die Teile jeder Charge über alle Dokumente und schreibt eine Zeile pro Charge in eine Excel-Arbeitsmappe. Batches, die in mehreren Dokumenten oder mehrmals in einem Dokument erscheinen, werden zusammengefügt.
 
 Der Text einer PDF wird direkt gelesen, wenn die PDF Text enthält. Wenn eine Seite keinen Text enthält, wird sie als gescanntes Bild behandelt und mit optischer Zeichenerkennung (OCR) gelesen. Wenn keine OCR-Engine installiert ist, werden gescannte PDFs nicht gelesen und zur manuellen Überprüfung aufgelistet.
 
-Das Programm wurde für mexikanische pharmazeutische Rückgabedokumente geschrieben. Alle Nachrichten und Ausgabedateien sind in Spanisch; ihre Bedeutung wird in diesem Handbuch erklärt.
+Das Programm wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Alle Nachrichten und Ausgabedateien sind in Spanisch; ihre Bedeutung wird in diesem Handbuch erklärt.
 
 diagnostico.py verwendet genau den gleichen Lese- und Erkennungscode wie lotes_auto.py. Es druckt den Text, der aus jedem PDF gelesen wurde, was darin erkannt wurde und das Ergebnis, so dass ein PDF, das nicht richtig gelesen wird, untersucht werden kann. Es schreibt keine Dateien.
 
@@ -29,50 +29,46 @@ diagnostico.py verwendet genau den gleichen Lese- und Erkennungscode wie lotes_a
 
 Das Programm erkennt vier Layouts. Jede Seite wird in der hier angegebenen Reihenfolge untersucht, und das erste Layout, das Ergebnisse liefert, wird für diese Seite verwendet.
 
-1. Formulare, in denen jede Spalte ein Produkt ist. Eine Zeile, die mit einem Lotwort wie `Lote` gekennzeichnet ist, enthält eine Lotzahl pro Spalte. Andere Zeilen, z. B. `Cantidad Recibida` oder `Cantidad Facturada`, enthalten die Menge jedes Produkts in derselben Spalte. Wenn mehrere Mengenreihen vorhanden sind, wird die Zeile durch die unter Konfiguration beschriebene Priorität ausgewählt.
+1. Formulare, in denen jede Spalte ein Produkt ist. Eine Zeile, die mit einem Batchwort wie `Lote` gekennzeichnet ist, enthält eine Chargennummer pro Spalte. Andere Zeilen, z. B. `Cantidad Recibida` oder `Cantidad Facturada`, enthalten die Menge jedes Produkts in derselben Spalte. Wenn mehrere Mengenreihen vorhanden sind, wird die Zeile durch die unter Konfiguration beschriebene Priorität ausgewählt.
 
-2. Tabellen mit einer Überschrift. Eine Überschrift wie `CANTIDAD`, `PIEZAS` oder `No. de piezas` markiert die Zahlenspalte, und die Werte darunter werden gelesen. Die Losnummer wird einer Überschrift wie `LOTE` entnommen, wenn vorhanden, ansonsten von irgendwo in derselben Zeile, zum Beispiel innerhalb der Beschreibung, oder von den nächsten zwei Zeilen. Überschriften, die sich über zwei Zeilen erstrecken, wie `PIEZAS` über `DEVUELTAS`, werden als eine Überschrift gelesen.
+2. Tabellen mit einer Überschrift. Eine Überschrift wie `CANTIDAD`, `PIEZAS` oder `No. de piezas` markiert die Zahlenspalte, und die Werte darunter werden gelesen. Die Chargennummer wird einer Überschrift wie `LOTE` entnommen, falls vorhanden, ansonsten von irgendwo in derselben Zeile, z. B. innerhalb der Beschreibung, oder von den nächsten zwei Zeilen. Überschriften, die sich über zwei Zeilen erstrecken, wie `PIEZAS` über `DEVUELTAS`, werden als eine Überschrift gelesen.
 
-3. Beschriftete Linien, in denen das Los zuerst kommt, beispielsweise eine Linie `LOTE: 25240310` gefolgt von einer Linie `CANTIDAD EN PIEZAS: 1,250`. Jedes Los wird mit der ersten Menge gepaart, die ihm folgt.
+3. Beschriftete Zeilen, in denen der Batch zuerst kommt, beispielsweise eine Zeile `LOTE: 25240310` gefolgt von einer Zeile `CANTIDAD EN PIEZAS: 1,250`. Jede Charge wird mit der ersten Menge gepaart, die ihr folgt.
 
-4. Beschriftete Zeilen, in denen die Menge an erster Stelle steht. Jede Menge wird mit dem ersten Los gepaart, das darauf folgt. Ob ein Dokument Layout 3 oder Layout 4 verwendet, entscheidet sein erstes Label.
+4. Beschriftete Zeilen, in denen die Menge an erster Stelle steht. Jede Menge wird mit der ersten Charge gepaart, die ihr folgt. Ob ein Dokument Layout 3 oder Layout 4 verwendet, entscheidet sein erstes Label.
 
-Wörter, die als Lot-Etiketten erkannt werden: `lote`, `serie`, `serial`, `n/s`, `s/n`, optional vorangestellt oder gefolgt von `No.`, `Num.` oder `Numero`. Wörter, die als Quantitätsetiketten erkannt werden: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Wörter, die in Tabellen als Mengenüberschriften erkannt werden, umfassen auch `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` und `viales`. Das Wort `unidad` allein ist keine Menge, weil es die Maßeinheit benennt. `Cajas` wird nie verwendet, weil es Boxen zählt, nicht Stücke.
+Wörter, die als Batch-Etiketten erkannt werden: `lote`, `serie`, `serial`, `n/s`, `s/n`, optional vorangestellt oder gefolgt von `No.`, `Num.` oder `Numero`. Wörter, die als Quantitätsetiketten erkannt werden: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Wörter, die in Tabellen als Mengenüberschriften erkannt werden, umfassen auch `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` und `viales`. Das Wort `unidad` allein ist keine Menge, weil es die Maßeinheit benennt. `Cajas` wird nie verwendet, weil es Boxen zählt, nicht Stücke.
 
 ## Regeln für jeden Wert
 
-- Eine Lotzahl muss aus genau acht Ziffern bestehen und mit 24, 25 oder 26 beginnen. Alles andere wird ignoriert, einschließlich Preise, Beträge, Daten und Produktcodes. Zeichen, die von der OCR an eine Lotnummer gebunden sind, z. B. ein vertikaler Balken, werden entfernt.
-- Zahlen werden in der mexikanischen Notation gelesen: 1.250 ist eintausendzweihundertfünfzig, und 1.250.50 ist eintausendzweihundertfünfzigeinhalb.
+- Eine Chargennummer muss aus genau acht Ziffern bestehen und mit `24`, `25` oder `26` beginnen. Alles andere wird ignoriert, einschließlich Preise, Beträge, Daten und Produktcodes. Zeichen, die von der OCR an eine Chargennummer angehängt werden, z. B. ein vertikaler Balken, werden entfernt.
+- Zahlen werden in der mexikanischen Notation gelesen, mit einem Komma als Tausenden Trennzeichen und einem Punkt als Dezimaltrennzeichen: `1,250` ist eintausendzweihundertfünfzig und `1,250.50` ist eintausendzweihundertfünfzigeinhalb.
 - Mengen mit Dezimalstellen und Mengen, die Null oder negativ sind, werden ignoriert, weil Stücke ganze Zahlen sind. Dies verhindert auch, dass Preise als Stücke gezählt werden.
 - Dateien, deren Name `FALTA REVISION` enthält, in Groß- oder Kleinbuchstaben und mit oder ohne Akzent auf dem O, werden übersprungen und zählen nicht zu einer Gesamtsumme.
-- Eine einzelne Menge größer als 50.000 wird noch hinzugefügt, wird aber am Ende des Laufs als verdächtig gemeldet.
+- Eine einzelne Größe größer als `50,000` wird immer noch hinzugefügt, wird aber am Ende des Laufs als verdächtig gemeldet.
 
 ## Optionen
 
-lotes_auto.py:
+Optionen von lotes_auto.py:
 
-```
-FOLDER       folder that contains the PDF files; subfolders are included
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `FOLDER`: Der Ordner, der die PDF-Dateien enthält. Unterordner sind enthalten.
+- `--version`: Drucken Sie die Versionsnummer und den Ausgang.
+- `-h`, `--help`: Drucken Sie eine kurze Nutzungsnachricht und Exit.
 
-diagnostico.py:
+Optionen von diagnostico.py:
 
-```
-PATH         a single PDF file, or a folder whose PDF files are all examined
---lineas N   show at most N lines of text per PDF; the default is 40
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `PATH`: eine einzelne PDF-Datei oder ein Ordner, dessen PDF-Dateien alle untersucht werden.
+- `--lineas N`: höchstens N Textzeilen pro PDF anzeigen. Der Default ist 40.
+- `--version`: Drucken Sie die Versionsnummer und den Ausgang.
+- `-h`, `--help`: Drucken Sie eine kurze Nutzungsnachricht und Exit.
 
 ## Ausgabedateien
 
 lotes_auto.py schreibt die folgenden Dateien in FOLDER. Bestehende Dateien mit den gleichen Namen werden ersetzt. Eine Datei, die leer wäre, wird stattdessen entfernt.
 
-`totales_lotes.xlsx` ist das Ergebnis. Es hat ein Blatt namens `Lotes` mit zwei Spalten, `Lote` und `Cantidad en Piezas`, eine Zeile pro Los, sortiert nach Losnummer. Die Mengen werden als Zahlen gespeichert und mit Tausenden Separatoren angezeigt.
+`totales_lotes.xlsx` ist das Ergebnis. Es hat ein Blatt namens `Lotes` mit zwei Spalten, `Lote` und `Cantidad en Piezas`, eine Zeile pro Charge, sortiert nach Chargennummer. Die Mengen werden als Zahlen gespeichert und mit Tausenden Separatoren angezeigt.
 
-`detalle_lotes.txt` listet für jedes Los jeden Betrag auf, der hinzugefügt wurde, und das PDF, aus dem der Betrag stammt. Verwenden Sie es, um die Quelle einer Summe zu finden, die falsch aussieht.
+`detalle_lotes.txt` listet für jeden Batch jeden Betrag auf, der hinzugefügt wurde, und das PDF, aus dem der Betrag stammt. Verwenden Sie es, um die Quelle einer Summe zu finden, die falsch aussieht.
 
 `revisar_a_mano.txt` hat zwei Abschnitte. Die erste listet die Dateien auf, die übersprungen wurden, weil ihr Name `FALTA REVISION` enthält. Die zweite listet die PDFs auf, aus denen keine Menge gelesen werden konnte, jeweils mit dem Grund: keine lesbaren Mengen, gescannt ohne OCR oder ein Fehler beim Lesen der Datei.
 
@@ -82,30 +78,26 @@ lotes_auto.py schreibt die folgenden Dateien in FOLDER. Bestehende Dateien mit d
 
 Während es läuft, druckt lotes_auto.py eine Zeile pro PDF. Die Nachricht nach dem Pfeil hat folgende Bedeutung:
 
-```
--> N cantidades (texto)                 N quantities were read from a PDF that contains text
--> N cantidades (OCR)                   N quantities were read from a scanned PDF
--> 0 cantidades (...)                   nothing was read; see sin_resultado.log
--> omitido (FALTA REVISION)             the file was skipped because of its name
--> escaneado, OCR no disponible         a scanned PDF could not be read because OCR is missing
--> ERROR: ...                           the file could not be opened or read
-```
+- `-> N cantidades (texto)`: N Größen wurden aus einem PDF gelesen, das Text enthält.
+- `-> N cantidades (OCR)`: N Größen wurden aus einem gescannten PDF gelesen.
+- `-> 0 cantidades`: Es wurde nichts gelesen. Siehe sin_resultado.log.
+- `-> omitido (FALTA REVISION)`: Die Datei wurde wegen ihres Namens übersprungen.
+- `-> escaneado, OCR no disponible`: Ein gescanntes PDF konnte nicht gelesen werden, da keine OCR-Engine installiert ist.
+- `-> ERROR`: Die Datei konnte nicht geöffnet oder gelesen werden.
 
-Am Ende druckt es die Anzahl der Lose und Mengen, die Namen der Dateien, die es geschrieben hat, und, wenn eine einzelne Menge größer als 50.000 ist, eine Liste dieser Mengen, angeführt von `cantidades sospechosamente grandes`.
+Am Ende druckt es die Anzahl der Chargen und Mengen, die Namen der Dateien, die es geschrieben hat, und, wenn eine einzelne Menge größer als `50,000` ist, eine Liste dieser Mengen, angeführt von `cantidades sospechosamente grandes`.
 
 ## Ausstiegsstatus
 
-```
-0   success
-1   the Excel file could not be written, usually because it is open in Excel
-2   invalid arguments, or FOLDER does not exist
-```
+- `0`: Erfolg.
+- `1`: Die Excel-Datei konnte nicht geschrieben werden, normalerweise weil sie in Excel geöffnet ist.
+- `2`: ungültige Argumente, oder der Ordner existiert nicht.
 
 ## Konfiguration
 
 Die Einstellungen befinden sich oben in lotes_auto.py. Bearbeiten Sie sie mit einem beliebigen Texteditor und speichern Sie die Datei in der UTF-8-Codierung.
 
-`LOTE_WORDS` und `CANT_WORDS` sind reguläre Ausdrücke mit den Wörtern, die Loszahlen und Mengen kennzeichnen.
+`LOTE_WORDS` und `CANT_WORDS` sind reguläre Ausdrücke mit den Wörtern, die Chargennummern und -mengen kennzeichnen.
 
 `PRIORIDAD_CANTIDAD` entscheidet, welche Menge Spalte oder Zeile verwendet wird, wenn ein Dokument mehrere hat. Das erste Wort in der Liste, das in einer Überschrift erscheint, gewinnt. Die Standardreihenfolge lautet `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`; das heißt, eine Spalte über Stücke oder zurückgegebene Waren wird bevorzugt und eine in Rechnung gestellte Menge wird nur als letzter Ausweg verwendet.
 
@@ -113,7 +105,7 @@ Die Einstellungen befinden sich oben in lotes_auto.py. Bearbeiten Sie sie mit ei
 
 `OMITIR_NOMBRE` ist das Muster der Dateinamen, die übersprungen werden. Der Standard entspricht `FALTA REVISION`.
 
-`LOTE_ID` ist das Muster einer gültigen Losnummer. Der Standard akzeptiert genau acht Ziffern, beginnend mit 24, 25 oder 26. Um beispielsweise auch Lose ab 27 zu akzeptieren, ändern Sie `2[456]` in `2[4567]`.
+`LOTE_ID` ist das Muster einer gültigen Chargennummer. Der Standard akzeptiert genau acht Ziffern, beginnend mit `24`, `25` oder `26`. Um beispielsweise auch Chargen ab 27 zu akzeptieren, ändern Sie `2[456]` in `2[4567]`.
 
 ## Installation
 
@@ -286,7 +278,7 @@ Die Excel-Datei kann nicht gespeichert werden. Das Programm endet mit dem Exit-S
 
 Alle oder viele PDFs zeigen `0 cantidades`. Führen Sie diagnostico.py auf einem von ihnen aus. Wenn der angezeigte Text leer ist, ist das PDF ein Scan und die OCR liest ihn nicht. Wenn der Text vorhanden ist, aber nichts erkannt wird, werden die Beschriftungen oder das Layout nicht erkannt; der angezeigte Text oder der entsprechende Eintrag in sin_resultado.log zeigt an, welche Wörter das Dokument verwendet, und sie können der Konfiguration hinzugefügt werden.
 
-Eine Summe ist viel zu groß. Suchen Sie nach dem Los in detalle_lotes.txt, um jeden hinzugefügten Betrag und seine Quelle zu sehen. Häufige Ursachen sind eine Zahlenspalte, die falsch gewählt wurde, weil das Dokument eine unbekannte Überschrift, zwei benachbarte Zahlen, die von der OCR zusammengeführt werden, und das gleiche PDF verwendet, das zweimal im Ordner vorhanden ist.
+Eine Summe ist viel zu groß. Suchen Sie nach dem Batch in detalle_lotes.txt, um jeden hinzugefügten Betrag und seine Quelle zu sehen. Häufige Ursachen sind eine Zahlenspalte, die falsch gewählt wurde, weil das Dokument eine unbekannte Überschrift, zwei benachbarte Zahlen, die von der OCR zusammengeführt werden, und das gleiche PDF verwendet, das zweimal im Ordner vorhanden ist.
 
 Die OCR kann unter Windows (`DLL load failed`) nicht geladen werden. Installieren Sie msvc-runtime wie in den Windows-Anweisungen gezeigt.
 
@@ -300,20 +292,18 @@ Handschriftliche Zahlen werden von der OCR gelesen, wenn sie klar geschrieben si
 
 Die OCR kann gelegentlich eine Ziffer falsch lesen, insbesondere bei verschwommenen oder verzerrten Scans. Summen aus gescannten PDFs sollten stichprobenartig mit detalle_lotes.txt verglichen werden.
 
-Das Format der Losnummer wird durch `LOTE_ID` festgelegt. Dokumente, die ein anderes Format verwenden, werden ignoriert, bis das Muster geändert wird.
+Das Batch-Nummernformat wird durch `LOTE_ID` festgelegt. Dokumente, die ein anderes Format verwenden, werden ignoriert, bis das Muster geändert wird.
 
 Es wird erwartet, dass es sich bei den Mengen um ganze Stückzahlen handelt. Dokumente, die Boxen oder andere Einheiten zählen, werden nicht konvertiert.
 
 ## Akten
 
-```
-lotes_auto.py      the program
-diagnostico.py     the diagnostic tool; must be in the same folder as lotes_auto.py
-README.md          short description (also README.de.md and README.es.md)
-docs/              this manual in English, German and Spanish
-tools/             the script that translates the documentation
-LICENSE            license text
-```
+- lotes_auto.py: das Programm.
+- diagnostico.py: das Diagnosewerkzeug. Es muss sich im gleichen Ordner wie lotes_auto.py befinden.
+- README.md: eine kurze Beschreibung, auch als README.de.md und README.es.md verfügbar.
+- `docs/`: dieses Handbuch in Englisch, Deutsch und Spanisch.
+- `tools/translate_docs.py`: das Skript, das die Dokumentation übersetzt.
+- `LICENSE`: Der Lizenztext.
 
 ## Lizenz
 

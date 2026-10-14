@@ -2,13 +2,13 @@
 
 Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
-Otros idiomas: [Deutsch](README.de.md), [English](README.es.md)
+Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals lee una carpeta de documentos PDF, como facturas, notas de entrega y formularios de devolución de productos, encuentra cada número de lotes y el número de piezas registradas para él, y escribe el número total de piezas por lote a un archivo Excel.
+pdf-totals lee una carpeta de documentos PDF, tales como facturas, notas de entrega y formularios de devolución de productos, encuentra cada número de lotes y el número de piezas registradas para él, y escribe el número total de piezas por lote a un archivo Excel.
 
-Lee PDFs que contienen texto directamente y lee PDFs escaneados con reconocimiento de caracteres ópticos (OCR). Comprende varios diseños comunes: tablas con mucha columna y una columna de cantidad, tablas donde el número de lote aparece dentro de la descripción, formas donde cada columna es un producto, y líneas etiquetadas como `LOTE: 25240310` seguido por `CANTIDAD: 1,250`.
+Lee PDFs que contienen texto directamente y lee PDFs escaneados con reconocimiento de caracteres ópticos (OCR). Comprende varios diseños comunes: tablas con una columna de lote y una columna de cantidad, tablas donde el número de lote aparece dentro de la descripción, formas donde cada columna es un producto, y líneas etiquetadas como `LOTE: 25240310` seguido por `CANTIDAD: 1,250`.
 
-El programa fue escrito para documentos de retorno farmacéutico mexicano. Sus mensajes y archivos de salida están en español. Se espera que muchos números tengan exactamente ocho dígitos y comiencen con 24, 25 o 26; esta regla es fácil de cambiar.
+El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Se espera que los números de lotes tengan exactamente ocho dígitos y comiencen con `24`, `25` o `26`; esta regla es fácil de cambiar.
 
 ## Necesidades
 
@@ -57,7 +57,7 @@ macOS, Linux y BSD:
 La carpeta se registra recursivamente. Los archivos cuyo nombre contiene `FALTA REVISION` son saltados. Cuando el programa termina, la carpeta contiene:
 
 - `totales_lotes.xlsx`: una fila por lote con el número total de piezas.
-- `detalle_lotes.txt`: cada cantidad que se agregó a cada lote y el PDF que vino de.
+- `detalle_lotes.txt`: cada cantidad que se agregó a cada lote y el PDF que provenía.
 - `revisar_a_mano.txt`: PDFs que fueron saltados y PDFs de los que no se podía leer ninguna cantidad.
 - `sin_resultado.log`: el texto que fue leído en cada PDF que no produjo cantidad.
 
@@ -67,7 +67,7 @@ Para ver lo que el programa lee y detecta en un solo PDF sin escribir ningún ar
 
 El manual describe cada opción, los diseños compatibles, los archivos de salida, los ajustes de configuración y la instalación en cada plataforma:
 
-- Español: [docs/en/MANUAL.md](docs/en/MANUAL.md)
+- Inglés: [docs/en/MANUAL.md](docs/en/MANUAL.md)
 - Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)
 - Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 

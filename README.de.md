@@ -2,13 +2,13 @@
 
 Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate übersetzt. Wenn es sich vom englischen Original unterscheidet, gilt das englische Original.
 
-Andere Sprachen: [Deutsch](README.de.md), [Español](README.es.md)]
+Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
 pdf-totals liest einen Ordner mit PDF-Dokumenten wie Rechnungen, Lieferscheinen und Produktrückgabeformularen, findet jede Chargennummer und die Anzahl der dafür aufgezeichneten Teile und schreibt die Gesamtzahl der Teile pro Charge in eine Excel-Datei.
 
 Es liest PDFs, die Text direkt enthalten, und liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es versteht mehrere gängige Layouts: Tabellen mit einer Chargenspalte und einer Mengenspalte, Tabellen, in denen die Chargennummer in der Beschreibung erscheint, Formulare, in denen jede Spalte ein Produkt ist, und beschriftete Zeilen wie `LOTE: 25240310` gefolgt von `CANTIDAD: 1,250`.
 
-Das Programm wurde für mexikanische pharmazeutische Rückgabedokumente geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Es wird erwartet, dass die Losnummern genau acht Ziffern haben und mit 24, 25 oder 26 beginnen; diese Regel ist leicht zu ändern.
+Das Programm wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Es wird erwartet, dass Batch-Nummern genau acht Ziffern haben und mit `24`, `25` oder `26` beginnen; diese Regel ist leicht zu ändern.
 
 ## Anforderungen
 
@@ -56,8 +56,8 @@ macOS, Linux und BSD:
 
 Der Ordner wird rekursiv durchsucht. Dateien, deren Name `FALTA REVISION` enthält, werden übersprungen. Wenn das Programm beendet ist, enthält der Ordner:
 
-- `totales_lotes.xlsx`: eine Reihe pro Los mit der Gesamtzahl der Stücke.
-- `detalle_lotes.txt`: jeder Betrag, der zu jedem Lot hinzugefügt wurde, und das PDF, aus dem es stammt.
+- `totales_lotes.xlsx`: eine Reihe pro Charge mit der Gesamtzahl der Stücke.
+- `detalle_lotes.txt`: jeder Betrag, der zu jeder Charge hinzugefügt wurde, und das PDF, aus dem es stammt.
 - `revisar_a_mano.txt`: PDFs, die übersprungen wurden und PDFs, aus denen keine Menge gelesen werden konnte.
 - `sin_resultado.log`: Der Text, der aus jedem PDF gelesen wurde, das keine Menge produzierte.
 
@@ -67,9 +67,9 @@ Um zu sehen, was das Programm in einem einzelnen PDF liest und erkennt, ohne Dat
 
 Das Handbuch beschreibt jede Option, die unterstützten Layouts, die Ausgabedateien, die Konfigurationseinstellungen und die Installation auf jeder Plattform:
 
-- Englisch: [docs/en/MANUAL.md](docs/en/MANUAL.md)]
-- Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)]
-- Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)]
+- Englisch: [docs/en/MANUAL.md](docs/en/MANUAL.md)
+- Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)
+- Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 
 Die deutschen und spanischen Dokumente werden automatisch aus den englischen Originalen mit Argos Translate übersetzt. Wenn sie nicht einverstanden sind, sind die englischen Dokumente autoritativ.
 

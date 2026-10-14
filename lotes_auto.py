@@ -180,14 +180,27 @@ def parse_sideways(rows):
     return found
 
 
-def header_prio(rows, i, tok):
+def header_cells(row):
+    """Une palabras muy juntas del encabezado en una sola celda: 'No.' 'de' 'piezas'
+    -> 'No. de piezas', para que la columna cubra todo el titulo."""
+    cells = []
+    for t in row["toks"]:
+        if cells and t[0] - cells[-1][1] < max(t[3], cells[-1][3]) * 0.6:
+            c = cells[-1]
+            cells[-1] = (c[0], t[1], c[2], max(c[3], t[3]), c[4] + " " + t[4])
+        else:
+            cells.append(t)
+    return cells
+
+
+def header_prio(rows, i, tok, toks=None):
     """Prioridad de una columna de cantidad segun su encabezado completo (incluye
     palabras justo arriba/abajo, p. ej. 'Cantidad' / 'Recibida' en dos renglones,
     y la palabra siguiente en el mismo renglon, p. ej. 'Piezas Devueltas')."""
     x0, x1 = tok[0], tok[1]
     pad = max((x1 - x0) * 0.3, 5)
     ctx = [tok[4]]
-    toks = rows[i]["toks"]
+    toks = toks or rows[i]["toks"]
     k = toks.index(tok)
     if k + 1 < len(toks) and not CANT_HDR.search(toks[k + 1][4]):
         ctx.append(toks[k + 1][4])
@@ -204,12 +217,17 @@ def parse_table(rows):
     found = []
     qcol = lcol = None
     for i, row in enumerate(rows):
-        if not re.search(r"\d", row["text"]):
-            qs = [t for t in row["toks"] if CANT_HDR.search(t[4])]
-            q = min(qs, key=lambda t: (header_prio(rows, i, t), t[0])) if qs else None
+        # Renglon de encabezado: tiene una palabra de cantidad (p. ej. "No. de piezas"),
+        # no es "PIEZAS: 30" (etiqueta con valor) y no contiene lotes. Puede tener otros
+        # numeros sueltos como "Hoja 1 de 2" o "Folio: 2".
+        if (not CANT_RE.search(row["text"]) and not valid_lote(row["text"])
+                and sum(bool(LEAD_NUM.fullmatch(t[4])) for t in row["toks"]) <= 2):
+            cells = header_cells(row)
+            qs = [t for t in cells if CANT_HDR.search(t[4])]
+            q = min(qs, key=lambda t: (header_prio(rows, i, t, cells), t[0])) if qs else None
             if q:
                 qcol = q
-                lcol = next((t for t in row["toks"] if LOTE_HDR.search(t[4]) and t is not q), None)
+                lcol = next((t for t in cells if LOTE_HDR.search(t[4]) and t is not q), None)
                 continue
         if not qcol:
             continue

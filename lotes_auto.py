@@ -88,8 +88,10 @@ for n, pdf in enumerate(pdfs, 1):
     try:
         with pdfplumber.open(pdf) as doc:
             current, cur_page = None, None
+            leidas = []
             for pnum, page in enumerate(doc.pages, 1):
                 lines, fuente = page_lines(page)
+                leidas += lines
                 if not lines:
                     avisos.append([name, pnum, "", "Pagina sin texto legible (ni con OCR)"])
                 for line in lines:
@@ -112,7 +114,14 @@ for n, pdf in enumerate(pdfs, 1):
                             avisos.append([name, pnum, "", "Cantidad sin lote: " + line.strip()[:120]])
             if current:
                 avisos.append([name, cur_page, current, "Lote sin cantidad"])
-        print(f"  -> {len(detail) - antes} cantidades")
+        encontradas = len(detail) - antes
+        print(f"  -> {encontradas} cantidades ({fuente})")
+        if encontradas == 0:
+            print("     Texto leido de este PDF (primeras 15 lineas):")
+            for l in leidas[:15]:
+                print("     | " + l)
+            if not leidas:
+                print("     | (nada: no se pudo leer texto)")
     except Exception as e:
         print(f"   ERROR en {name}: {e}")
         avisos.append([name, "", "", f"Error: {e}"])
@@ -122,42 +131,23 @@ for n, pdf in enumerate(pdfs, 1):
             print("    y vuelve a correr el script.")
             sys.exit(1)
 
-bold = Font(bold=True)
 wb = Workbook()
 ws = wb.active
 ws.title = "Lotes"
 ws.append(["Lote", "Cantidad en Piezas"])
+for c in ws[1]:
+    c.font = Font(bold=True)
 for lote in sorted(totals, key=sort_key):
     ws.append([lote, fmt(totals[lote])])
 ws.column_dimensions["A"].width = 22
 ws.column_dimensions["B"].width = 20
 
-ws2 = wb.create_sheet("Detalle")
-ws2.append(["Archivo", "Pagina", "Lote", "Cantidad", "Fuente"])
-for r in detail:
-    ws2.append(r)
-
-if avisos:
-    ws3 = wb.create_sheet("Avisos")
-    ws3.append(["Archivo", "Pagina", "Lote", "Aviso"])
-    for r in avisos:
-        ws3.append(r)
-
-for sh in wb.worksheets:
-    for c in sh[1]:
-        c.font = bold
-    sh.freeze_panes = "A2"
-
 out = folder / "totales_lotes.xlsx"
 try:
     wb.save(out)
 except PermissionError:
-    out = folder / "totales_lotes_nuevo.xlsx"
-    wb.save(out)
+    print(f"\n*** No se pudo guardar {out.name}: esta abierto en Excel. Cierralo y vuelve a correr el script.")
+    sys.exit(1)
 
-md = ["| Lote | Cantidad en Piezas |", "|---|---|"]
-md += [f"| {l} | {fmt(totals[l])} |" for l in sorted(totals, key=sort_key)]
-(folder / "totales_lotes.md").write_text("\n".join(md), encoding="utf-8")
-
-print(f"\n{len(totals)} lotes | {len(detail)} cantidades leidas | {len(avisos)} avisos")
+print(f"\n{len(totals)} lotes encontrados | {len(detail)} cantidades leidas")
 print(f"Excel: {out}")

@@ -4,17 +4,19 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 # ===== Etiquetas del numero de lote (lote y serie se tratan igual) =====
-LOTE_WORDS = r"lote|serial|serie|n/s|s/n"
+LOTE_WORDS = r"l[o0]te|serial|serie|n/s|s/n"
 # ===== Etiquetas de la cantidad =====
 CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
 
+# Nota: el OCR a veces quita los espacios ("CANTIDADENPIEZAS:1,250", "NODELOTE:4567"),
+# por eso las etiquetas se reconocen aunque esten pegadas a otras palabras.
 LOTE_RE = re.compile(
-    r"(?<![a-z])(?:" + LOTE_WORDS + r")(?![a-z])\.?\s*(?:n[º°o]\.?|n[uú]m\.?|n[uú]mero)?\s*[:#\-]?\s*"
-    r"(?P<id>(?=[\w\-/.]*\d)[A-Za-z0-9][\w\-/.]*)", re.I)
-Q = r"(?:" + CANT_WORDS + r")(?![a-z])\.?"
+    r"(?:" + LOTE_WORDS + r")\.?\s*(?:n[º°o]\.?|n[uú]m\.?|n[uú]mero)?\s*[:#\-]?\s*"
+    r"(?P<id>(?=[\w\-/.]*\d)[A-Za-z0-9](?:(?!" + CANT_WORDS + r")[A-Za-z0-9\-/.])*)", re.I)
+Q = r"(?:" + CANT_WORDS + r")\.?"
 CANT_RE = re.compile(
-    r"(?<![a-z])" + Q + r"(?:\s*(?:/|en|de)?\s*" + Q + r")*\s*(?:\(\w*\))?\s*[:=\-]?\s*(?P<n>\d[\d.,]*)", re.I)
-LOTE_WORD_RE = re.compile(r"(?<![a-z])(?:" + LOTE_WORDS + r")(?![a-z])", re.I)
+    Q + r"(?:\s*(?:/|en|de)?\s*" + Q + r")*\s*(?:\(\w*\))?\s*[:=\-]?\s*(?P<n>\d[\d.,]*)", re.I)
+LOTE_WORD_RE = re.compile(r"(?:" + LOTE_WORDS + r")", re.I)
 
 def to_num(s):
     # Formato mexicano: 1,250 = 1250 ; 1,250.50 = 1250.5
@@ -81,7 +83,8 @@ print(f"{len(pdfs)} PDFs encontrados en {folder}")
 
 for n, pdf in enumerate(pdfs, 1):
     name = str(pdf.relative_to(folder))
-    print(f"[{n}/{len(pdfs)}] {name}")
+    print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
+    antes = len(detail)
     try:
         with pdfplumber.open(pdf) as doc:
             current, cur_page = None, None
@@ -109,8 +112,15 @@ for n, pdf in enumerate(pdfs, 1):
                             avisos.append([name, pnum, "", "Cantidad sin lote: " + line.strip()[:120]])
             if current:
                 avisos.append([name, cur_page, current, "Lote sin cantidad"])
+        print(f"  -> {len(detail) - antes} cantidades")
     except Exception as e:
+        print(f"   ERROR en {name}: {e}")
         avisos.append([name, "", "", f"Error: {e}"])
+        if "ocr" in str(e).lower() or "dll" in str(e).lower() or isinstance(e, ImportError):
+            print("\n*** El OCR no pudo cargarse. Ejecuta:")
+            print("    & $py -m pip install rapidocr_onnxruntime msvc-runtime")
+            print("    y vuelve a correr el script.")
+            sys.exit(1)
 
 bold = Font(bold=True)
 wb = Workbook()

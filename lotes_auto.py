@@ -15,7 +15,7 @@ LOTE_WORDS = r"l[o0]te|serial|serie|n/s|s/n"
 CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
 # En formatos "de lado" (cada columna es un producto) puede haber varios renglones de
 # cantidad (Recibida, Facturada...). Se usa el primero de esta lista que tenga numeros:
-PRIORIDAD_CANTIDAD = ["pieza", "devuel", "recibid", "cantidad", "factur"]
+PRIORIDAD_CANTIDAD = ["pieza", "devuel", "frasco", "ampollet", "ampula", "vial", "recibid", "cantidad", "factur"]
 # PDFs cuyo nombre contiene esto se omiten (no cuentan en el total):
 # Una sola cantidad mayor a esto se avisa en pantalla como sospechosa (igual se suma):
 AVISO_CANTIDAD_GRANDE = 50000
@@ -30,7 +30,8 @@ Q = r"(?:" + CANT_WORDS + r")\.?"
 CANT_RE = re.compile(
     Q + r"(?:\s*(?:/|en|de)?\s*" + Q + r")*\s*(?:\(\w*\))?\s*[:=\-]?\s*(?P<n>\d[\d.,]*)", re.I)
 # Encabezados de columna (sin "unidad", que es la unidad de medida, no la cantidad)
-CANT_HDR = re.compile(r"cantidad|cant(?![a-z])|piezas|pzas|pzs|unidades|(?<![a-z])uds|(?<![a-z])pz(?![a-z])", re.I)
+CANT_HDR = re.compile(r"cantidad|cant(?![a-z])|piezas|pzas|pzs|unidades|(?<![a-z])uds|(?<![a-z])pz(?![a-z])"
+                      r"|devuelt[oa]s?|frascos|ampolletas|[aá]mpulas|viales", re.I)
 LOTE_HDR = re.compile(LOTE_WORDS, re.I)
 LEAD_NUM = re.compile(r"\d[\d.,]*")
 
@@ -218,6 +219,7 @@ def parse_table(rows):
     Si hay varias columnas de cantidad se usa la de mayor prioridad (PRIORIDAD_CANTIDAD)."""
     found = []
     qcol = lcol = None
+    qprio, last_hdr = 99, -9
     for i, row in enumerate(rows):
         # Renglon de encabezado: tiene una palabra de cantidad (p. ej. "No. de piezas"),
         # no es "PIEZAS: 30" (etiqueta con valor) y no contiene lotes. Puede tener otros
@@ -228,7 +230,13 @@ def parse_table(rows):
             qs = [t for t in cells if CANT_HDR.search(t[4])]
             q = min(qs, key=lambda t: (header_prio(rows, i, t, cells), t[0])) if qs else None
             if q:
-                qcol = q
+                p = header_prio(rows, i, q, cells)
+                # Segundo renglon del mismo encabezado (p. ej. "PIEZAS" / "DEVUELTAS"):
+                # solo cambia la columna si apunta a una claramente mejor.
+                if qcol is not None and i == last_hdr + 1 and p >= qprio:
+                    last_hdr = i
+                    continue
+                qcol, qprio, last_hdr = q, p, i
                 lcol = next((t for t in cells if LOTE_HDR.search(t[4]) and t is not q), None)
                 continue
         if not qcol:

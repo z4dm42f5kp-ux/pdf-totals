@@ -1,69 +1,83 @@
-import re, sys, pathlib
-import pdfplumber
+"""diagnostico.py - muestra lo que lotes_auto.py lee y detecta en uno o varios PDFs.
 
-_ocr = None
+Usa exactamente el mismo codigo de lectura que lotes_auto.py (mismo OCR, mismos
+filtros), asi que lo que muestra es lo que el programa principal ve. No modifica
+ningun archivo.
 
-def ocr_lines(page):
-    # Lee una pagina escaneada (imagen) con OCR y devuelve sus lineas de texto
-    global _ocr
-    import numpy as np
-    if _ocr is None:
-        from rapidocr_onnxruntime import RapidOCR
-        _ocr = RapidOCR()
-    img = page.to_image(resolution=300).original.convert("RGB")
-    res, _ = _ocr(np.array(img))
-    if not res:
-        return []
-    items = []
-    for box, text, score in res:
-        ys = [p[1] for p in box]
-        xs = [p[0] for p in box]
-        items.append(((min(ys) + max(ys)) / 2, max(ys) - min(ys), min(xs), text))
-    items.sort()
-    lines = []
-    for yc, h, x, t in items:
-        if lines and abs(yc - lines[-1]["y"]) < max(h, lines[-1]["h"]) * 0.6:
-            lines[-1]["parts"].append((x, t))
-        else:
-            lines.append({"y": yc, "h": h, "parts": [(x, t)]})
-    return [" ".join(t for x, t in sorted(l["parts"])) for l in lines]
+Uso:
+    python diagnostico.py RUTA [--lineas N]
+
+RUTA puede ser un PDF o una carpeta (se revisan todos los PDFs, con subcarpetas).
+"""
+import argparse
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import lotes_auto as la  # noqa: E402
 
 
-# Muestra lo que el script "ve" dentro de los PDFs, para encontrar por que no detecta lotes.
-folder = pathlib.Path(sys.argv[1]).expanduser()
-pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
-print(f"PDFs encontrados: {len(pdfs)}")
-if not pdfs:
-    print("No hay PDFs en esa carpeta. Revisa la ruta.")
-    sys.exit()
+def diagnose(pdf, max_lines):
+    print("=" * 70)
+    print(f"ARCHIVO: {pdf}")
+    if la.OMITIR_NOMBRE.search(pdf.name):
+        print("Nota: el nombre contiene 'FALTA REVISION'; lotes_auto.py lo omite.")
+    trace = []
+    try:
+        found, lines, source = la.read_pdf(pdf, trace)
+    except la.OCRNoDisponible as e:
+        print("Resultado: PDF escaneado y el OCR no esta disponible en este sistema.")
+        print(f"Detalle: {e}")
+        print("Instalar OCR: " + la.ocr_install_hint())
+        return
+    except Exception as e:
+        print(f"Resultado: error al leer el PDF: {e}")
+        return
 
-for pdf in pdfs[:2]:
-    print("\n" + "=" * 60)
-    print(f"ARCHIVO: {pdf.name}")
-    with pdfplumber.open(pdf) as doc:
-        print(f"Paginas: {len(doc.pages)}")
-        page = doc.pages[0]
-        text = page.extract_text() or ""
-        print(f"Caracteres de texto en pagina 1: {len(page.chars)}")
-        if not page.chars:
-            print(">> PDF escaneado (imagen): leyendo con OCR...")
-            text = "\n".join(ocr_lines(page))
-        print("-" * 60)
-        print("PRIMERAS 40 LINEAS DE LA PAGINA 1:")
-        for line in text.splitlines()[:40]:
-            print("  | " + line)
-        print("-" * 60)
-        print("LINEAS CON LOTE / SERIE / CANTIDAD / PIEZAS (todas las paginas, max 20):")
-        hits = 0
-        for pnum, pg in enumerate(doc.pages, 1):
-            lines = (pg.extract_text() or "").splitlines() if pg.chars else ocr_lines(pg)
-            for line in lines:
-                if re.search(r"lote|serie|cant|pieza|pza|l\s*o\s*t\s*e", line, re.I):
-                    print(f"  p{pnum} | {line}")
-                    hits += 1
-                    if hits >= 20:
-                        break
-            if hits >= 20:
-                break
-        if hits == 0:
-            print("  (ninguna)")
+    print(f"Fuente del texto: {source}")
+    print("-" * 70)
+    shown = lines[:max_lines]
+    print(f"TEXTO LEIDO ({len(shown)} de {len(lines)} renglones):")
+    for line in shown:
+        print("  | " + line)
+    if not lines:
+        print("  | (nada: no se pudo leer texto)")
+    print("-" * 70)
+    print("DETECTADO:")
+    for note in trace:
+        print("  - " + note)
+    print("-" * 70)
+    if found:
+        print(f"RESULTADO: {len(found)} cantidades")
+        for lote, v in found:
+            print(f"  lote {lote}   cantidad {la.fmt(v):,}")
+    else:
+        print("RESULTADO: 0 cantidades (este PDF iria a revisar_a_mano.txt)")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="diagnostico.py",
+        description="Muestra lo que lotes_auto.py lee y detecta en uno o varios PDFs.")
+    ap.add_argument("ruta", help="un PDF o una carpeta con PDFs")
+    ap.add_argument("--lineas", type=int, default=40, metavar="N",
+                    help="maximo de renglones de texto a mostrar por PDF (por omision: 40)")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {la.VERSION}")
+    args = ap.parse_args(argv)
+
+    path = pathlib.Path(args.ruta).expanduser()
+    if path.is_file():
+        pdfs = [path]
+    elif path.is_dir():
+        pdfs = sorted(p for p in path.rglob("*") if p.suffix.lower() == ".pdf")
+    else:
+        print(f"*** No existe: {path}")
+        return 2
+    print(f"PDFs a revisar: {len(pdfs)}")
+    for pdf in pdfs:
+        diagnose(pdf, args.lineas)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

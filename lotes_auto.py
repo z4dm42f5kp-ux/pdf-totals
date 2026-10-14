@@ -1,4 +1,4 @@
-import re, sys, pathlib
+import argparse, os, re, sys, pathlib
 import pdfplumber
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -8,7 +8,9 @@ from openpyxl.styles import Font
 #   1) Tabla con columnas  LOTE | CANTIDAD   (encabezado arriba, numeros abajo)
 #   2) Tabla con columna CANTIDAD y el lote dentro de la descripcion ("... LOTE: 4567 ...")
 #   3) Texto con etiquetas:  LOTE: 4567  /  CANTIDAD EN PIEZAS: 1,250
-# Los PDFs escaneados se leen con OCR.
+# Los PDFs escaneados se leen con OCR (si rapidocr_onnxruntime esta instalado).
+
+VERSION = "1.0.0"
 
 # ===== Etiquetas (puedes agregar palabras aqui) =====
 LOTE_WORDS = r"l[o0]te|serial|serie|n/s|s/n"
@@ -16,9 +18,9 @@ CANT_WORDS = r"cantidad|cant|piezas|pieza|pzas|pza|pzs|pz|unidades|unid|uds"
 # En formatos "de lado" (cada columna es un producto) puede haber varios renglones de
 # cantidad (Recibida, Facturada...). Se usa el primero de esta lista que tenga numeros:
 PRIORIDAD_CANTIDAD = ["pieza", "devuel", "frasco", "ampollet", "ampula", "vial", "recibid", "cantidad", "factur"]
-# PDFs cuyo nombre contiene esto se omiten (no cuentan en el total):
 # Una sola cantidad mayor a esto se avisa en pantalla como sospechosa (igual se suma):
 AVISO_CANTIDAD_GRANDE = 50000
+# PDFs cuyo nombre contiene esto se omiten (no cuentan en el total):
 OMITIR_NOMBRE = re.compile(r"falta[\s_\-]*revisi[oó]n", re.I)
 # =====================================================
 
@@ -75,20 +77,53 @@ def sort_key(s):
 # ---------- Lectura de palabras con su posicion ----------
 _ocr = None
 
+
+class OCRNoDisponible(Exception):
+    """El PDF es escaneado y el OCR no esta instalado o no carga en este sistema."""
+
+def load_ocr():
+    """Carga el OCR. Usa rapidocr_onnxruntime (Python <= 3.12) o, si no esta,
+    rapidocr 3.x + onnxruntime (Python 3.13 y posteriores). Devuelve una funcion
+    imagen -> [(caja, texto, confianza)]."""
+    errores = []
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        eng = RapidOCR()
+        return lambda arr: (eng(arr)[0] or [])
+    except Exception as e:              # ImportError, o "DLL load failed" en Windows
+        errores.append(f"rapidocr_onnxruntime: {e}")
+    try:
+        import logging
+        from rapidocr import RapidOCR
+        logging.getLogger("RapidOCR").setLevel(logging.WARNING)
+        eng = RapidOCR()
+
+        def run(arr):
+            r = eng(arr)
+            if r.boxes is None:
+                return []
+            return list(zip(r.boxes.tolist(), r.txts, r.scores))
+        return run
+    except Exception as e:
+        errores.append(f"rapidocr: {e}")
+    raise OCRNoDisponible("; ".join(errores))
+
+
 def page_tokens(page):
     """Devuelve [(x0, x1, y_centro, alto, texto)] y la fuente ('texto' u 'OCR')."""
     if page.chars:
         words = page.extract_words(x_tolerance=1.5, y_tolerance=2)
         return [(w["x0"], w["x1"], (w["top"] + w["bottom"]) / 2, w["bottom"] - w["top"], w["text"]) for w in words], "texto"
     global _ocr
-    import numpy as np
     if _ocr is None:
-        from rapidocr_onnxruntime import RapidOCR
-        _ocr = RapidOCR()
-    img = page.to_image(resolution=300).original.convert("RGB")
-    res, _ = _ocr(np.array(img))
+        _ocr = load_ocr()
+    import numpy as np
+    try:
+        img = page.to_image(resolution=300).original.convert("RGB")
+    except ImportError as e:            # sin pypdfium2 (p. ej. en BSD) no se puede rasterizar
+        raise OCRNoDisponible(str(e)) from e
     toks = []
-    for box, text, score in (res or []):
+    for box, text, score in _ocr(np.array(img)):
         xs = [p[0] for p in box]
         ys = [p[1] for p in box]
         toks.append((min(xs), max(xs), (min(ys) + max(ys)) / 2, max(ys) - min(ys), text))
@@ -144,9 +179,10 @@ def label_and_values(row):
     return " ".join(w[2] for w in words[:i]), words[i:]
 
 
-def parse_sideways(rows):
+def parse_sideways(rows, trace=None):
     """Formato de lado: renglon 'Lote' con un lote por columna y renglones de cantidad
-    con el valor de cada columna debajo/alineado."""
+    con el valor de cada columna debajo/alineado. 'trace' (lista) recibe notas para
+    diagnostico.py."""
     found = []
     for i, row in enumerate(rows):
         label, vals = label_and_values(row)
@@ -177,7 +213,10 @@ def parse_sideways(rows):
                 if abs(col[0] - cx) <= tol:
                     pairs.append((col[1], v))
             if pairs and (best is None or prio < best[0]):
-                best = (prio, pairs)
+                best = (prio, pairs, lab2)
+        if trace is not None:
+            trace.append(f"de lado: renglon '{label}' con lotes {[c[1] for c in cols]}"
+                         + (f"; cantidades del renglon '{best[2]}'" if best else "; sin renglon de cantidad con numeros"))
         if best:
             found += best[1]
     return found
@@ -214,7 +253,7 @@ def header_prio(rows, i, tok, toks=None):
     return next((n for n, w in enumerate(PRIORIDAD_CANTIDAD) if w in ctx), len(PRIORIDAD_CANTIDAD))
 
 
-def parse_table(rows):
+def parse_table(rows, trace=None):
     """Formatos 1 y 2: encabezado CANTIDAD (y quiza LOTE) con valores debajo.
     Si hay varias columnas de cantidad se usa la de mayor prioridad (PRIORIDAD_CANTIDAD)."""
     found = []
@@ -238,6 +277,9 @@ def parse_table(rows):
                     continue
                 qcol, qprio, last_hdr = q, p, i
                 lcol = next((t for t in cells if LOTE_HDR.search(t[4]) and t is not q), None)
+                if trace is not None:
+                    trace.append(f"tabla: columna de cantidad '{q[4]}' (prioridad {p})"
+                                 + (f", columna de lote '{lcol[4]}'" if lcol else ", lote buscado en el renglon"))
                 continue
         if not qcol:
             continue
@@ -265,6 +307,8 @@ def parse_table(rows):
                     break
         if lote:
             found.append((lote, v))
+            if trace is not None:
+                trace.append(f"tabla: renglon -> lote {lote}, cantidad {fmt(v)}")
     return found
 
 
@@ -296,40 +340,99 @@ def pair_events(ev):
     return out
 
 
-# ---------- Programa principal ----------
-folder = pathlib.Path(sys.argv[1]).expanduser()
-pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
-print(f"{len(pdfs)} PDFs encontrados en {folder}")
+def read_pdf(path, trace=None):
+    """Lee un PDF y devuelve (encontrados, lineas_leidas, fuente).
+    encontrados = [(lote, cantidad), ...] ya filtrados (lote valido, cantidad entera > 0).
+    'trace' (lista) recibe notas de lo detectado; lo usa diagnostico.py."""
+    found, ev, leidas, fuente = [], [], [], ""
+    with pdfplumber.open(path) as doc:
+        for pnum, page in enumerate(doc.pages, 1):
+            toks, fuente = page_tokens(page)
+            rows = group_rows(toks)
+            leidas += [r["text"] for r in rows]
+            if trace is not None:
+                trace.append(f"pagina {pnum}: {len(rows)} renglones leidos ({fuente})")
+            t = parse_sideways(rows, trace) or parse_table(rows, trace)
+            if t:
+                found += t
+            else:
+                e = inline_events(rows)
+                if trace is not None and e:
+                    trace.append(f"pagina {pnum}: etiquetas en linea: "
+                                 + ", ".join(f"{'lote' if k == 'L' else 'cantidad'} {v if k == 'L' else fmt(v)}"
+                                             for k, v in e))
+                ev += e
+    found += pair_events(ev)
+    # Ultimo filtro: lote valido y cantidad entera (las piezas no llevan decimales)
+    checked = [(valid_lote(l), l, v) for l, v in found]
+    if trace is not None:
+        for ok, l, v in checked:
+            if not ok:
+                trace.append(f"descartado: '{l}' no es un lote valido (8 digitos, empieza con 24/25/26)")
+            elif not float(v).is_integer() or v <= 0:
+                trace.append(f"descartado: lote {ok} con cantidad {v} (no es entera o no es positiva)")
+    found = [(ok, v) for ok, l, v in checked if ok and float(v).is_integer() and v > 0]
+    return found, leidas, fuente
 
-totals = {}
-n_total = 0
-sin_resultado = []
-omitidos = []
-detalle = {}        # lote -> [(archivo, cantidad)]
-grandes = []
-for n, pdf in enumerate(pdfs, 1):
-    name = str(pdf.relative_to(folder))
-    print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
-    if OMITIR_NOMBRE.search(pdf.name):
-        omitidos.append(name)
-        print("  -> omitido (FALTA REVISION)")
-        continue
-    try:
-        found, ev, leidas, fuente = [], [], [], ""
-        with pdfplumber.open(pdf) as doc:
-            for page in doc.pages:
-                toks, fuente = page_tokens(page)
-                rows = group_rows(toks)
-                leidas += [r["text"] for r in rows]
-                t = parse_sideways(rows) or parse_table(rows)
-                if t:
-                    found += t
-                else:
-                    ev += inline_events(rows)
-        found += pair_events(ev)
-        # Ultimo filtro: lote valido y cantidad entera (las piezas no llevan decimales)
-        found = [(valid_lote(l), v) for l, v in found]
-        found = [(l, v) for l, v in found if l and float(v).is_integer() and v > 0]
+
+def ocr_install_hint():
+    if sys.version_info >= (3, 13):
+        pkgs = "rapidocr onnxruntime"
+    else:
+        pkgs = "rapidocr_onnxruntime"
+    if os.name == "nt":
+        pkgs += " msvc-runtime"
+    return f'"{sys.executable}" -m pip install {pkgs}'
+
+
+# ---------- Programa principal ----------
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="lotes_auto.py",
+        description="Suma las piezas por numero de lote en todos los PDFs de una carpeta "
+                    "(incluye subcarpetas) y guarda el resultado en totales_lotes.xlsx.")
+    ap.add_argument("carpeta", help="carpeta con los PDFs")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    args = ap.parse_args(argv)
+
+    folder = pathlib.Path(args.carpeta).expanduser()
+    if not folder.is_dir():
+        print(f"*** No existe la carpeta: {folder}")
+        return 2
+    pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
+    print(f"{len(pdfs)} PDFs encontrados en {folder}")
+
+    totals = {}
+    n_total = 0
+    sin_resultado = []  # [(archivo, motivo)]
+    omitidos = []
+    detalle = {}        # lote -> [(archivo, cantidad)]
+    grandes = []
+    log = []            # texto leido de los PDFs sin resultado
+    aviso_ocr = False
+    for n, pdf in enumerate(pdfs, 1):
+        name = str(pdf.relative_to(folder))
+        print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
+        if OMITIR_NOMBRE.search(pdf.name):
+            omitidos.append(name)
+            print("  -> omitido (FALTA REVISION)")
+            continue
+        try:
+            found, leidas, fuente = read_pdf(pdf)
+        except OCRNoDisponible as e:
+            print("  -> escaneado, OCR no disponible")
+            sin_resultado.append((name, "escaneado; OCR no disponible en este sistema"))
+            log += ["=" * 70, name, "Motivo: escaneado; OCR no disponible", f"Detalle: {e}", ""]
+            if not aviso_ocr:
+                print("     Para leer PDFs escaneados instala el OCR:  " + ocr_install_hint())
+                aviso_ocr = True
+            continue
+        except Exception as e:
+            print(f"  -> ERROR: {e}")
+            sin_resultado.append((name, f"error al leer: {e}"))
+            log += ["=" * 70, name, f"Motivo: error al leer: {e}", ""]
+            continue
+
         for lote, v in found:
             totals[lote] = totals.get(lote, 0) + v
             detalle.setdefault(lote, []).append((name, v))
@@ -338,62 +441,73 @@ for n, pdf in enumerate(pdfs, 1):
         n_total += len(found)
         print(f"  -> {len(found)} cantidades ({fuente})")
         if not found:
-            sin_resultado.append(name)
-            print("     Texto leido de este PDF (primeras 15 lineas):")
-            for l in leidas[:15]:
-                print("     | " + l)
-            if not leidas:
-                print("     | (nada: no se pudo leer texto)")
-    except Exception as e:
-        print(f"  -> ERROR: {e}")
-        if isinstance(e, ImportError) or "dll" in str(e).lower():
-            print("\n*** El OCR no pudo cargarse. Ejecuta:")
-            print("    & $py -m pip install rapidocr_onnxruntime msvc-runtime")
-            sys.exit(1)
+            sin_resultado.append((name, "sin cantidades legibles"))
+            log += ["=" * 70, name, f"Motivo: sin cantidades legibles (fuente: {fuente})",
+                    "Texto leido:"]
+            log += ["  | " + l for l in leidas] or ["  | (nada: no se pudo leer texto)"]
+            log.append("")
+            print("     (texto leido guardado en sin_resultado.log)")
 
-wb = Workbook()
-ws = wb.active
-ws.title = "Lotes"
-ws.append(["Lote", "Cantidad en Piezas"])
-for c in ws[1]:
-    c.font = Font(bold=True)
-for lote in sorted(totals, key=sort_key):
-    ws.append([lote, fmt(totals[lote])])
-    ws.cell(row=ws.max_row, column=2).number_format = "#,##0"   # 1,406 con coma de miles
-ws.column_dimensions["A"].width = 22
-ws.column_dimensions["B"].width = 20
+    # ----- Excel -----
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Lotes"
+    ws.append(["Lote", "Cantidad en Piezas"])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    for lote in sorted(totals, key=sort_key):
+        ws.append([lote, fmt(totals[lote])])
+        ws.cell(row=ws.max_row, column=2).number_format = "#,##0"   # 1,406 con coma de miles
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 20
 
-out = folder / "totales_lotes.xlsx"
-try:
-    wb.save(out)
-except PermissionError:
-    print(f"\n*** No se pudo guardar {out.name}: esta abierto en Excel. Cierralo y vuelve a correr el script.")
-    sys.exit(1)
+    out = folder / "totales_lotes.xlsx"
+    try:
+        wb.save(out)
+    except PermissionError:
+        print(f"\n*** No se pudo guardar {out.name}: esta abierto en Excel. Cierralo y vuelve a correr el script.")
+        return 1
 
-print(f"\n{len(totals)} lotes | {n_total} cantidades leidas")
-if omitidos or sin_resultado:
+    print(f"\n{len(totals)} lotes | {n_total} cantidades leidas")
+
+    # ----- Lista para revisar a mano -----
     rev = folder / "revisar_a_mano.txt"
-    txt = [f"PDFs YA MARCADOS 'FALTA REVISION' (omitidos, no cuentan en el total): {len(omitidos)}"]
-    txt += ["   " + nm for nm in omitidos]
-    txt += ["", f"PDFs SIN CANTIDADES LEGIBLES (revisar a mano): {len(sin_resultado)}"]
-    txt += ["   " + nm for nm in sin_resultado]
-    rev.write_text("\n".join(txt), encoding="utf-8")
-    print(f"{len(omitidos)} omitidos por FALTA REVISION | {len(sin_resultado)} sin cantidades legibles")
-    print(f"Lista: {rev}")
-elif (folder / "revisar_a_mano.txt").exists():
-    (folder / "revisar_a_mano.txt").unlink()
-# Detalle: de que PDF salio cada cantidad de cada lote
-det = folder / "detalle_lotes.txt"
-lines = []
-for lote in sorted(detalle, key=sort_key):
-    lines.append(f"{lote}   TOTAL = {fmt(totals[lote]):,}")
-    for nm, v in detalle[lote]:
-        lines.append(f"      {fmt(v):>10,}   {nm}")
-    lines.append("")
-det.write_text("\n".join(lines), encoding="utf-8")
-if grandes:
-    print(f"\n*** {len(grandes)} cantidades sospechosamente grandes (> {AVISO_CANTIDAD_GRANDE:,}), revisalas:")
-    for nm, lote, v in grandes:
-        print(f"   {fmt(v):>12,}  lote {lote}  en  {nm}")
-print(f"Detalle por lote: {det}")
-print(f"Excel: {out}")
+    if omitidos or sin_resultado:
+        txt = [f"PDFs YA MARCADOS 'FALTA REVISION' (omitidos, no cuentan en el total): {len(omitidos)}"]
+        txt += ["   " + nm for nm in omitidos]
+        txt += ["", f"PDFs SIN CANTIDADES LEGIBLES (revisar a mano): {len(sin_resultado)}"]
+        txt += [f"   {nm}   [{motivo}]" for nm, motivo in sin_resultado]
+        rev.write_text("\n".join(txt) + "\n", encoding="utf-8")
+        print(f"{len(omitidos)} omitidos por FALTA REVISION | {len(sin_resultado)} sin cantidades legibles")
+        print(f"Lista: {rev}")
+    elif rev.exists():
+        rev.unlink()
+
+    # ----- Log con el texto leido de los PDFs sin resultado -----
+    logf = folder / "sin_resultado.log"
+    if log:
+        logf.write_text("\n".join(log) + "\n", encoding="utf-8")
+        print(f"Texto leido de esos PDFs: {logf}")
+    elif logf.exists():
+        logf.unlink()
+
+    # ----- Detalle: de que PDF salio cada cantidad de cada lote -----
+    det = folder / "detalle_lotes.txt"
+    lines = []
+    for lote in sorted(detalle, key=sort_key):
+        lines.append(f"{lote}   TOTAL = {fmt(totals[lote]):,}")
+        for nm, v in detalle[lote]:
+            lines.append(f"      {fmt(v):>10,}   {nm}")
+        lines.append("")
+    det.write_text("\n".join(lines), encoding="utf-8")
+    if grandes:
+        print(f"\n*** {len(grandes)} cantidades sospechosamente grandes (> {AVISO_CANTIDAD_GRANDE:,}), revisalas:")
+        for nm, lote, v in grandes:
+            print(f"   {fmt(v):>12,}  lote {lote}  en  {nm}")
+    print(f"Detalle por lote: {det}")
+    print(f"Excel: {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

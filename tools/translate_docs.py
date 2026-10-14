@@ -31,12 +31,12 @@ JOBS = [
 NOTICE = ("This file was translated automatically from the English original with "
           "Argos Translate. If it differs from the English original, the English original applies.")
 
-# Inline code, markdown link targets and bare URLs are never translated.
+# Inline code, markdown links and bare URLs are never translated.
 # Program, file and package names are kept as well.
 NAMES = ["pdf-totals", "pdfplumber", "openpyxl", "rapidocr_onnxruntime", "rapidocr", "onnxruntime",
          "opencv-python-headless", "opencv-python", "msvc-runtime", "pdfminer.six", "et_xmlfile",
          "charset-normalizer", "cryptography", "Argos Translate", "PowerShell", "Homebrew", "pip", "uv"]
-PROTECT = re.compile(r"`[^`]+`|\]\([^)]+\)|https?://\S+"
+PROTECT = re.compile(r"`[^`]+`|\[[^\]]*\]\([^)]+\)|https?://\S+"
                      r"|\b[\w-]+(?:\.[\w-]+)*\.(?:py|xlsx|txt|log|md|pdf|zip|exe)\b"
                      r"|(?<![\w-])(?:" + "|".join(re.escape(n) for n in NAMES) + r")(?![\w-])")
 

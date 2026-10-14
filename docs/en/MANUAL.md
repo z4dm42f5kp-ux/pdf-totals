@@ -2,7 +2,7 @@
 
 ## Name
 
-lotes_auto.py - add up the number of pieces per lot number found in a folder of PDF documents
+lotes_auto.py - add up the number of pieces per batch number found in a folder of PDF documents
 
 diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF documents
 
@@ -15,11 +15,11 @@ python diagnostico.py [-h] [--version] [--lineas N] PATH
 
 ## Description
 
-lotes_auto.py searches FOLDER and all of its subfolders for files ending in .pdf. From each PDF it reads every lot number and the number of pieces recorded for that lot. It then adds up the pieces of each lot over all documents and writes one row per lot to an Excel workbook. Lots that appear in several documents, or several times in one document, are added together.
+lotes_auto.py searches FOLDER and all of its subfolders for files ending in .pdf. From each PDF it reads every batch number and the number of pieces recorded for that batch. It then adds up the pieces of each batch over all documents and writes one row per batch to an Excel workbook. Batches that appear in several documents, or several times in one document, are added together.
 
 The text of a PDF is read directly when the PDF contains text. When a page contains no text, it is treated as a scanned image and read with optical character recognition (OCR). If no OCR engine is installed, scanned PDFs are not read and are listed for manual review.
 
-The program was written for Mexican pharmaceutical return documents. All messages and output files are in Spanish; their meaning is explained in this manual.
+The program was written for documents about returned pharmaceutical products in Mexico. All messages and output files are in Spanish; their meaning is explained in this manual.
 
 diagnostico.py uses exactly the same reading and detection code as lotes_auto.py. It prints the text that was read from each PDF, what was detected in it and the result, so that a PDF that is not read correctly can be examined. It does not write any files.
 
@@ -27,50 +27,46 @@ diagnostico.py uses exactly the same reading and detection code as lotes_auto.py
 
 The program recognizes four layouts. Each page is examined in the order given here, and the first layout that produces results is used for that page.
 
-1. Forms in which each column is one product. A row labelled with a lot word, such as `Lote`, contains one lot number per column. Other rows, labelled for example `Cantidad Recibida` or `Cantidad Facturada`, contain the quantity of each product in the same column. If several quantity rows exist, the row is chosen by the priority described under Configuration.
+1. Forms in which each column is one product. A row labelled with a batch word, such as `Lote`, contains one batch number per column. Other rows, labelled for example `Cantidad Recibida` or `Cantidad Facturada`, contain the quantity of each product in the same column. If several quantity rows exist, the row is chosen by the priority described under Configuration.
 
-2. Tables with a heading row. A heading such as `CANTIDAD`, `PIEZAS` or `No. de piezas` marks the quantity column, and the values below it are read. The lot number is taken from a heading such as `LOTE` when present, otherwise from anywhere in the same row, for example inside the description, or from the next two rows. Headings that span two lines, such as `PIEZAS` above `DEVUELTAS`, are read as one heading.
+2. Tables with a heading row. A heading such as `CANTIDAD`, `PIEZAS` or `No. de piezas` marks the quantity column, and the values below it are read. The batch number is taken from a heading such as `LOTE` when present, otherwise from anywhere in the same row, for example inside the description, or from the next two rows. Headings that span two lines, such as `PIEZAS` above `DEVUELTAS`, are read as one heading.
 
-3. Labelled lines in which the lot comes first, for example a line `LOTE: 25240310` followed by a line `CANTIDAD EN PIEZAS: 1,250`. Each lot is paired with the first quantity that follows it.
+3. Labelled lines in which the batch comes first, for example a line `LOTE: 25240310` followed by a line `CANTIDAD EN PIEZAS: 1,250`. Each batch is paired with the first quantity that follows it.
 
-4. Labelled lines in which the quantity comes first. Each quantity is paired with the first lot that follows it. Whether a document uses layout 3 or layout 4 is decided by its first label.
+4. Labelled lines in which the quantity comes first. Each quantity is paired with the first batch that follows it. Whether a document uses layout 3 or layout 4 is decided by its first label.
 
-Words recognized as lot labels: `lote`, `serie`, `serial`, `n/s`, `s/n`, optionally preceded or followed by `No.`, `Num.` or `Numero`. Words recognized as quantity labels: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Words recognized as quantity headings in tables also include `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` and `viales`. The word `unidad` alone is not a quantity, because it names the unit of measure. `Cajas` is never used, because it counts boxes, not pieces.
+Words recognized as batch labels: `lote`, `serie`, `serial`, `n/s`, `s/n`, optionally preceded or followed by `No.`, `Num.` or `Numero`. Words recognized as quantity labels: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.`, `uds`. Words recognized as quantity headings in tables also include `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` and `viales`. The word `unidad` alone is not a quantity, because it names the unit of measure. `Cajas` is never used, because it counts boxes, not pieces.
 
 ## Rules applied to every value
 
-- A lot number must consist of exactly eight digits and start with 24, 25 or 26. Anything else is ignored, including prices, amounts, dates and product codes. Characters attached to a lot number by the OCR, such as a vertical bar, are removed.
-- Numbers are read in Mexican notation: 1,250 is one thousand two hundred and fifty, and 1,250.50 is one thousand two hundred and fifty and a half.
+- A batch number must consist of exactly eight digits and start with `24`, `25` or `26`. Anything else is ignored, including prices, amounts, dates and product codes. Characters attached to a batch number by the OCR, such as a vertical bar, are removed.
+- Numbers are read in Mexican notation, with a comma as the thousands separator and a point as the decimal separator: `1,250` is one thousand two hundred and fifty, and `1,250.50` is one thousand two hundred and fifty and a half.
 - Quantities with decimals, and quantities that are zero or negative, are ignored, because pieces are whole numbers. This also prevents prices from being counted as pieces.
 - Files whose name contains `FALTA REVISION`, in upper or lower case and with or without an accent on the O, are skipped and do not count towards any total.
-- A single quantity larger than 50,000 is still added, but is reported at the end of the run as suspicious.
+- A single quantity larger than `50,000` is still added, but is reported at the end of the run as suspicious.
 
 ## Options
 
-lotes_auto.py:
+Options of lotes_auto.py:
 
-```
-FOLDER       folder that contains the PDF files; subfolders are included
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `FOLDER`: the folder that contains the PDF files. Subfolders are included.
+- `--version`: print the version number and exit.
+- `-h`, `--help`: print a short usage message and exit.
 
-diagnostico.py:
+Options of diagnostico.py:
 
-```
-PATH         a single PDF file, or a folder whose PDF files are all examined
---lineas N   show at most N lines of text per PDF; the default is 40
---version    print the version number and exit
--h, --help   print a short usage message and exit
-```
+- `PATH`: a single PDF file, or a folder whose PDF files are all examined.
+- `--lineas N`: show at most N lines of text per PDF. The default is 40.
+- `--version`: print the version number and exit.
+- `-h`, `--help`: print a short usage message and exit.
 
 ## Output files
 
 lotes_auto.py writes the following files into FOLDER. Existing files with the same names are replaced. A file that would be empty is removed instead.
 
-`totales_lotes.xlsx` is the result. It has one sheet named `Lotes` with two columns, `Lote` and `Cantidad en Piezas`, one row per lot, sorted by lot number. The quantities are stored as numbers and displayed with thousands separators.
+`totales_lotes.xlsx` is the result. It has one sheet named `Lotes` with two columns, `Lote` and `Cantidad en Piezas`, one row per batch, sorted by batch number. The quantities are stored as numbers and displayed with thousands separators.
 
-`detalle_lotes.txt` lists, for every lot, each amount that was added to it and the PDF that the amount came from. Use it to find the source of a total that looks wrong.
+`detalle_lotes.txt` lists, for every batch, each amount that was added to it and the PDF that the amount came from. Use it to find the source of a total that looks wrong.
 
 `revisar_a_mano.txt` has two sections. The first lists the files that were skipped because their name contains `FALTA REVISION`. The second lists the PDFs from which no quantity could be read, each with the reason: no readable quantities, scanned with no OCR available, or an error while reading the file.
 
@@ -80,30 +76,26 @@ lotes_auto.py writes the following files into FOLDER. Existing files with the sa
 
 While it runs, lotes_auto.py prints one line per PDF. The message after the arrow has the following meaning:
 
-```
--> N cantidades (texto)                 N quantities were read from a PDF that contains text
--> N cantidades (OCR)                   N quantities were read from a scanned PDF
--> 0 cantidades (...)                   nothing was read; see sin_resultado.log
--> omitido (FALTA REVISION)             the file was skipped because of its name
--> escaneado, OCR no disponible         a scanned PDF could not be read because OCR is missing
--> ERROR: ...                           the file could not be opened or read
-```
+- `-> N cantidades (texto)`: N quantities were read from a PDF that contains text.
+- `-> N cantidades (OCR)`: N quantities were read from a scanned PDF.
+- `-> 0 cantidades`: nothing was read. See sin_resultado.log.
+- `-> omitido (FALTA REVISION)`: the file was skipped because of its name.
+- `-> escaneado, OCR no disponible`: a scanned PDF could not be read because no OCR engine is installed.
+- `-> ERROR`: the file could not be opened or read.
 
-At the end it prints the number of lots and quantities, the names of the files it wrote, and, if any single quantity is larger than 50,000, a list of those quantities headed by `cantidades sospechosamente grandes`.
+At the end it prints the number of batches and quantities, the names of the files it wrote, and, if any single quantity is larger than `50,000`, a list of those quantities headed by `cantidades sospechosamente grandes`.
 
 ## Exit status
 
-```
-0   success
-1   the Excel file could not be written, usually because it is open in Excel
-2   invalid arguments, or FOLDER does not exist
-```
+- `0`: success.
+- `1`: the Excel file could not be written, usually because it is open in Excel.
+- `2`: invalid arguments, or the folder does not exist.
 
 ## Configuration
 
 The settings are at the top of lotes_auto.py. Edit them with any text editor and save the file in UTF-8 encoding.
 
-`LOTE_WORDS` and `CANT_WORDS` are regular expressions with the words that label lot numbers and quantities.
+`LOTE_WORDS` and `CANT_WORDS` are regular expressions with the words that label batch numbers and quantities.
 
 `PRIORIDAD_CANTIDAD` decides which quantity column or row is used when a document has several. The first word in the list that appears in a heading wins. The default order is `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`; that is, a column about pieces or returned goods is preferred, and an invoiced quantity is used only as a last resort.
 
@@ -111,7 +103,7 @@ The settings are at the top of lotes_auto.py. Edit them with any text editor and
 
 `OMITIR_NOMBRE` is the pattern of file names that are skipped. The default matches `FALTA REVISION`.
 
-`LOTE_ID` is the pattern of a valid lot number. The default accepts exactly eight digits starting with 24, 25 or 26. To accept, for example, lots starting with 27 as well, change `2[456]` to `2[4567]`.
+`LOTE_ID` is the pattern of a valid batch number. The default accepts exactly eight digits starting with `24`, `25` or `26`. To accept, for example, batches starting with 27 as well, change `2[456]` to `2[4567]`.
 
 ## Installation
 
@@ -284,7 +276,7 @@ The Excel file cannot be saved. The program stops with exit status 1 when totale
 
 All or many PDFs show `0 cantidades`. Run diagnostico.py on one of them. If the text it shows is empty, the PDF is a scan and the OCR is not reading it. If the text is present but nothing is detected, the labels or the layout are not recognized; the text shown, or the corresponding entry in sin_resultado.log, shows which words the document uses, and they can be added to the configuration.
 
-A total is much too large. Search for the lot in detalle_lotes.txt to see every amount that was added and its source. Common causes are a quantity column chosen wrongly because the document uses an unknown heading, two neighbouring numbers merged by the OCR, and the same PDF present twice in the folder.
+A total is much too large. Search for the batch in detalle_lotes.txt to see every amount that was added and its source. Common causes are a quantity column chosen wrongly because the document uses an unknown heading, two neighbouring numbers merged by the OCR, and the same PDF present twice in the folder.
 
 The OCR cannot be loaded on Windows (`DLL load failed`). Install msvc-runtime as shown in the Windows instructions.
 
@@ -298,20 +290,18 @@ Handwritten numbers are read by the OCR when they are written clearly. Untidy ha
 
 The OCR can occasionally misread a digit, in particular on blurred or skewed scans. Totals obtained from scanned PDFs should be spot-checked against detalle_lotes.txt.
 
-The lot number format is fixed by `LOTE_ID`. Documents that use another format are ignored until the pattern is changed.
+The batch number format is fixed by `LOTE_ID`. Documents that use another format are ignored until the pattern is changed.
 
 Quantities are expected to be whole numbers of pieces. Documents that count boxes or other units are not converted.
 
 ## Files
 
-```
-lotes_auto.py      the program
-diagnostico.py     the diagnostic tool; must be in the same folder as lotes_auto.py
-README.md          short description (also README.de.md and README.es.md)
-docs/              this manual in English, German and Spanish
-tools/             the script that translates the documentation
-LICENSE            license text
-```
+- lotes_auto.py: the program.
+- diagnostico.py: the diagnostic tool. It must be in the same folder as lotes_auto.py.
+- README.md: a short description, also available as README.de.md and README.es.md.
+- `docs/`: this manual in English, German and Spanish.
+- `tools/translate_docs.py`: the script that translates the documentation.
+- `LICENSE`: the license text.
 
 ## License
 

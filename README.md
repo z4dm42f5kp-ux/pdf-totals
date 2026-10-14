@@ -1,12 +1,12 @@
 # pdf-totals
 
-Other languages: [Deutsch](README.de.md), [Español](README.es.md)
+Languages: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals reads a folder of PDF documents, such as invoices, delivery notes and product return forms, finds every lot number and the number of pieces recorded for it, and writes the total number of pieces per lot to an Excel file.
+pdf-totals reads a folder of PDF documents, such as invoices, delivery notes and product return forms, finds every batch number and the number of pieces recorded for it, and writes the total number of pieces per batch to an Excel file.
 
-It reads PDFs that contain text directly and reads scanned PDFs with optical character recognition (OCR). It understands several common layouts: tables with a lot column and a quantity column, tables where the lot number appears inside the description, forms where each column is one product, and labelled lines such as `LOTE: 25240310` followed by `CANTIDAD: 1,250`.
+It reads PDFs that contain text directly and reads scanned PDFs with optical character recognition (OCR). It understands several common layouts: tables with a batch column and a quantity column, tables where the batch number appears inside the description, forms where each column is one product, and labelled lines such as `LOTE: 25240310` followed by `CANTIDAD: 1,250`.
 
-The program was written for Mexican pharmaceutical return documents. Its messages and output files are in Spanish. Lot numbers are expected to have exactly eight digits and start with 24, 25 or 26; this rule is easy to change.
+The program was written for documents about returned pharmaceutical products in Mexico. Its messages and output files are in Spanish. Batch numbers are expected to have exactly eight digits and start with `24`, `25` or `26`; this rule is easy to change.
 
 ## Requirements
 
@@ -54,8 +54,8 @@ macOS, Linux and BSD:
 
 The folder is searched recursively. Files whose name contains `FALTA REVISION` are skipped. When the program finishes, the folder contains:
 
-- `totales_lotes.xlsx`: one row per lot with the total number of pieces.
-- `detalle_lotes.txt`: every amount that was added to each lot and the PDF it came from.
+- `totales_lotes.xlsx`: one row per batch with the total number of pieces.
+- `detalle_lotes.txt`: every amount that was added to each batch and the PDF it came from.
 - `revisar_a_mano.txt`: PDFs that were skipped and PDFs from which no quantity could be read.
 - `sin_resultado.log`: the text that was read from each PDF that produced no quantity.
 

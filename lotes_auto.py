@@ -32,6 +32,14 @@ CANT_HDR = re.compile(r"cantidad|cant(?![a-z])|piezas|pzas|pzs|unidades|(?<![a-z
 LOTE_HDR = re.compile(LOTE_WORDS, re.I)
 LEAD_NUM = re.compile(r"\d[\d.,]*")
 
+# ===== Formato del lote: exactamente 8 digitos que empiezan con 24, 25 o 26 =====
+LOTE_ID = re.compile(r"(?<![\d.,])(2[456]\d{6})(?![\d]|[.,]\d)")
+
+def valid_lote(text):
+    """Devuelve el primer lote valido (8 digitos, empieza con 24/25/26) o None."""
+    m = LOTE_ID.search(text or "")
+    return m.group(1) if m else None
+
 
 def to_num(s):
     # Formato mexicano: 1,250 = 1250 ; 1,250.50 = 1250.5
@@ -141,7 +149,7 @@ def parse_sideways(rows):
         label, vals = label_and_values(row)
         if not LOTE_HDR.search(label):
             continue
-        cols = [((a + b) / 2, norm(w)) for a, b, w in vals if re.search(r"\d{3,}", w)]
+        cols = [((a + b) / 2, valid_lote(w)) for a, b, w in vals if valid_lote(w)]
         if len(cols) < 2:
             continue
         xs = sorted(c[0] for c in cols)
@@ -192,23 +200,23 @@ def parse_table(rows):
         v = to_num(m.group()) if m else None
         if v is None:
             continue
+        if valid_lote(qt[4]):
+            continue                      # el "numero" de cantidad es en realidad un lote
         lote = None
         if lcol:
             lt = in_column(row, lcol)
             if lt and lt is not qt:
-                lm = LOTE_RE.search(lt[4])
-                lote = lm.group("id") if lm else lt[4]
+                lote = valid_lote(lt[4])
         if not lote:
-            # lote dentro de la descripcion: este renglon o los 2 siguientes
+            # lote en otra parte del renglon (p. ej. en la descripcion) o en los 2 siguientes
             for r2 in [row] + rows[i + 1:i + 3]:
                 if r2 is not row and in_column(r2, qcol):
                     break
-                lm = LOTE_RE.search(r2["text"])
-                if lm:
-                    lote = lm.group("id")
+                lote = valid_lote(r2["text"])
+                if lote:
                     break
-        if lote and re.search(r"\d", lote):
-            found.append((norm(lote), v))
+        if lote:
+            found.append((lote, v))
     return found
 
 
@@ -217,7 +225,7 @@ def inline_events(rows):
     ev = []
     for row in rows:
         line = row["text"]
-        e = [(m.start(), "L", norm(m.group("id"))) for m in LOTE_RE.finditer(line)]
+        e = [(m.start(), "L", valid_lote(m.group("id"))) for m in LOTE_RE.finditer(line)]
         e += [(m.start(), "C", to_num(m.group("n"))) for m in CANT_RE.finditer(line)]
         ev += [(k, v) for _, k, v in sorted(e) if v is not None]
     return ev
@@ -269,6 +277,9 @@ for n, pdf in enumerate(pdfs, 1):
                 else:
                     ev += inline_events(rows)
         found += pair_events(ev)
+        # Ultimo filtro: lote valido y cantidad entera (las piezas no llevan decimales)
+        found = [(valid_lote(l), v) for l, v in found]
+        found = [(l, v) for l, v in found if l and float(v).is_integer() and v > 0]
         for lote, v in found:
             totals[lote] = totals.get(lote, 0) + v
         n_total += len(found)

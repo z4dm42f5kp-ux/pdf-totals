@@ -180,13 +180,33 @@ def parse_sideways(rows):
     return found
 
 
+def header_prio(rows, i, tok):
+    """Prioridad de una columna de cantidad segun su encabezado completo (incluye
+    palabras justo arriba/abajo, p. ej. 'Cantidad' / 'Recibida' en dos renglones,
+    y la palabra siguiente en el mismo renglon, p. ej. 'Piezas Devueltas')."""
+    x0, x1 = tok[0], tok[1]
+    pad = max((x1 - x0) * 0.3, 5)
+    ctx = [tok[4]]
+    toks = rows[i]["toks"]
+    k = toks.index(tok)
+    if k + 1 < len(toks) and not CANT_HDR.search(toks[k + 1][4]):
+        ctx.append(toks[k + 1][4])
+    for j in (i - 1, i + 1):
+        if 0 <= j < len(rows) and not re.search(r"\d", rows[j]["text"]):
+            ctx += [t[4] for t in rows[j]["toks"] if x0 - pad <= (t[0] + t[1]) / 2 <= x1 + pad]
+    ctx = " ".join(ctx).lower()
+    return next((n for n, w in enumerate(PRIORIDAD_CANTIDAD) if w in ctx), len(PRIORIDAD_CANTIDAD))
+
+
 def parse_table(rows):
-    """Formatos 1 y 2: encabezado CANTIDAD (y quiza LOTE) con valores debajo."""
+    """Formatos 1 y 2: encabezado CANTIDAD (y quiza LOTE) con valores debajo.
+    Si hay varias columnas de cantidad se usa la de mayor prioridad (PRIORIDAD_CANTIDAD)."""
     found = []
     qcol = lcol = None
     for i, row in enumerate(rows):
         if not re.search(r"\d", row["text"]):
-            q = next((t for t in row["toks"] if CANT_HDR.search(t[4])), None)
+            qs = [t for t in row["toks"] if CANT_HDR.search(t[4])]
+            q = min(qs, key=lambda t: (header_prio(rows, i, t), t[0])) if qs else None
             if q:
                 qcol = q
                 lcol = next((t for t in row["toks"] if LOTE_HDR.search(t[4]) and t is not q), None)

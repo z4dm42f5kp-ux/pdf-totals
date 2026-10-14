@@ -35,7 +35,10 @@ NOTICE = ("This file was translated automatically from the English original with
 # Program, file and package names are kept as well.
 NAMES = ["pdf-totals", "pdfplumber", "openpyxl", "rapidocr_onnxruntime", "rapidocr", "onnxruntime",
          "opencv-python-headless", "opencv-python", "msvc-runtime", "pdfminer.six", "et_xmlfile",
-         "charset-normalizer", "cryptography", "Argos Translate", "PowerShell", "Homebrew", "pip", "uv"]
+         "charset-normalizer", "cryptography", "Argos Translate", "PowerShell", "Homebrew", "pip", "uv",
+         "Alpine Linux", "Arch Linux", "openSUSE Leap", "openSUSE Tumbleweed", "openSUSE", "Debian",
+         "Ubuntu", "Fedora", "FreeBSD", "OpenBSD", "NetBSD", "macOS", "glibc", "musl", "curl", "root",
+         "venv", "GitHub", "Microsoft Visual C++", "Rust"]
 PROTECT = re.compile(r"`[^`]+`|\[[^\]]*\]\([^)]+\)|https?://\S+"
                      r"|\b[\w-]+(?:\.[\w-]+)*\.(?:py|xlsx|txt|log|md|pdf|zip|exe)\b"
                      r"|(?<![\w-])(?:" + "|".join(re.escape(n) for n in NAMES) + r")(?![\w-])")

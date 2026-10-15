@@ -60,7 +60,7 @@ macOS, Linux, FreeBSD, OpenBSD and NetBSD:
 ~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
 ```
 
-The program also searches all subfolders. It skips every file whose name contains `FALTA REVISION`. When the program finishes, the folder contains these files:
+The program also searches all subfolders. It skips every file whose name contains `FALTA REVISION`. The reference Excel file is the file `Retirado_retiro_producto_Traxicoll.xlsx` in the folder or in a subfolder. When the program finishes, the folder `resultados_lotes` inside the folder contains these files:
 
 - totales_lotes.xlsx contains three tables side by side on one sheet: withdrawn, not distributed, and total for destruction, each with the batch number and the number of pieces.
 - detalle_lotes.txt lists every quantity of each batch, the PDF that contains it and whether it is verified.

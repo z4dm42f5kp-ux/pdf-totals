@@ -25,7 +25,7 @@ The program then checks the result. The limits apply to each batch on its own, n
 
 ## The reference Excel file
 
-The program looks for an Excel file (.xlsx or .xlsm) in the folder FOLDER and in all of its subfolders. It uses the first file that has a column whose title contains `no distribuida`. A file can also be given with the option `--excel`. In this file the program finds three columns: the column with the batch numbers, the column with the not distributed quantity, and the column whose title contains `retirado`, which is the withdrawn quantity according to the customers. Other columns, such as the total for destruction, are ignored.
+The program looks for the Excel file with the name `Retirado_retiro_producto_Traxicoll` (.xlsx or .xlsm) in the folder FOLDER and in all of its subfolders. If there is no file with this name, it uses the first Excel file that has a column whose title contains `no distribuida`. A file in the old .xls format cannot be read; open it in Excel and save it as an .xlsx workbook. A file can also be given with the option `--excel`. In this file the program finds three columns: the column with the batch numbers, the column with the not distributed quantity, and the column whose title contains `retirado`, which is the withdrawn quantity according to the customers. Other columns, such as the total for destruction, are ignored.
 
 The not distributed quantity of each batch is taken from this file, not from PDF documents. The withdrawn quantity is still calculated from the PDF documents, and the result for each batch is compared with the withdrawn quantity in the Excel file. This comparison shows exactly which batch does not match and which PDF documents contribute to it.
 
@@ -113,7 +113,7 @@ Options of diagnostico.py:
 
 ## Output files
 
-lotes_auto.py writes the following files into the folder FOLDER. It replaces existing files with the same names.
+lotes_auto.py creates the folder `resultados_lotes` inside the folder FOLDER and writes the following files into it. It replaces existing files with the same names. The folder `resultados_lotes` is ignored when the program searches for PDF documents and Excel files.
 
 `totales_lotes.xlsx` contains the result on one sheet with the name `Lotes`. The sheet contains three tables side by side: `Cantidad de producto retirado`, `Cantidad no distribuida` and `Cantidad total para destrucción`. Each table has the columns `Lote` and `Cantidad en Piezas` and a row `TOTAL`. All three tables list the same batches in the same order, so a row can be read across the tables. The third table and the totals are formulas, so they are updated when you change a number by hand. Below each table, the sheet shows the expected total and the difference. Cells of batches that exceed a limit or do not match the withdrawal report are red.
 
@@ -149,6 +149,8 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 `TOTAL_ESPERADO`, `TOTAL_RETIRADO_ESPERADO` and `TOTAL_NO_DISTRIBUIDA_ESPERADO` are the expected totals for destruction, for withdrawn pieces and for pieces that were not distributed. The default values are `344451`, `209908` and `134543`. The value `None` switches a check off.
 
 `MAX_RETIRADO_POR_LOTE` and `MAX_NO_DISTRIBUIDA_POR_LOTE` are the limits for a single batch. They are not limits for the sum of a table. The default values are `48042` and `82090`.
+
+`EXCEL_NOMBRE` is the name of the reference Excel file that is searched first. The default value is `Retirado_retiro_producto_Traxicoll`. `CARPETA_RESULTADOS` is the name of the folder for the output files. The default value is `resultados_lotes`.
 
 `EXCEL_REFERENCIA` is the path of the reference Excel file. The default value `None` means that the file is searched in the folder and its subfolders. `SOLO_LOTES_DEL_EXCEL` decides whether quantities with a batch number that is not in the Excel file are left out. The default value is `True`.
 

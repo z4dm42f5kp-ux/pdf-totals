@@ -49,6 +49,10 @@ TOTAL_NO_DISTRIBUIDA_ESPERADO = 134543
 # indica con --excel). De el se toma la cantidad no distribuida; la cantidad retirada
 # se calcula con los PDFs y se compara, lote por lote, con la del Excel.
 EXCEL_REFERENCIA = None
+# Nombre (sin extension) del Excel de referencia que se busca primero.
+EXCEL_NOMBRE = "Retirado_retiro_producto_Traxicoll"
+# Carpeta, dentro de la carpeta de los PDFs, donde se guardan todos los resultados.
+CARPETA_RESULTADOS = "resultados_lotes"
 # Con Excel de referencia, los lotes que no estan en el Excel no se suman (casi siempre
 # son numeros de lote mal leidos); se listan en revisar_a_mano.txt.
 SOLO_LOTES_DEL_EXCEL = True
@@ -1095,10 +1099,27 @@ def leer_excel_referencia(ruta):
     return None
 
 
+class ExcelNoLegible(Exception):
+    pass
+
+
 def buscar_excel(folder):
-    """Primer .xlsx/.xlsm de la carpeta (o subcarpetas) con una columna 'no distribuida'."""
-    candidatos = sorted(p for p in folder.rglob("*") if p.suffix.lower() in (".xlsx", ".xlsm")
-                        and not p.name.startswith("~$") and not p.name.lower().startswith("totales_lotes"))
+    """El Excel llamado EXCEL_NOMBRE (en la carpeta o subcarpetas); si no esta, el primer
+    .xlsx/.xlsm con una columna 'no distribuida'."""
+    todos = [p for p in folder.rglob("*") if p.is_file() and not p.name.startswith("~$")
+             and CARPETA_RESULTADOS not in p.parts]
+    nombrados = sorted(p for p in todos if p.stem.lower() == EXCEL_NOMBRE.lower())
+    for p in nombrados:
+        if p.suffix.lower() == ".xls":
+            raise ExcelNoLegible(f"{p} esta en el formato antiguo .xls: abrelo en Excel y guardalo como "
+                                 f"'Libro de Excel (.xlsx)'")
+        if p.suffix.lower() in (".xlsx", ".xlsm"):
+            x = leer_excel_referencia(p)
+            if x is None:
+                raise ExcelNoLegible(f"{p} no tiene una columna 'no distribuida' con numeros de lote")
+            return x
+    candidatos = sorted(p for p in todos if p.suffix.lower() in (".xlsx", ".xlsm")
+                        and not p.name.lower().startswith("totales_lotes"))
     for p in candidatos:
         try:
             x = leer_excel_referencia(p)
@@ -1782,7 +1803,11 @@ def main(argv=None):
             print(f"*** {ruta_x} no existe o no tiene una columna 'no distribuida' con lotes")
             return 2
     else:
-        _EXCEL = buscar_excel(folder)
+        try:
+            _EXCEL = buscar_excel(folder)
+        except ExcelNoLegible as e:
+            print(f"*** {e}")
+            return 2
     if _EXCEL:
         sk = sum(r.ret or 0 for r in _EXCEL.refs.values())
         sj = sum(r.nod or 0 for r in _EXCEL.refs.values())
@@ -1792,7 +1817,9 @@ def main(argv=None):
             print(f"   AVISO: {a}")
     else:
         print("*** No se encontro el Excel de referencia: la cantidad no distribuida saldra de los PDFs.")
-    pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
+    salida = folder / CARPETA_RESULTADOS
+    pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf"
+                  and salida not in p.parents)
     print(f"{len(pdfs)} PDFs encontrados en {folder} (incluye subcarpetas)")
     info_omitidos = {}
 
@@ -1884,17 +1911,18 @@ def main(argv=None):
             log += ["Analisis:"] + ["  - " + x for x in L.traza] + [""]
 
     # ----- salidas -----
-    out = folder / "totales_lotes.xlsx"
+    salida.mkdir(exist_ok=True)
+    out = salida / "totales_lotes.xlsx"
     try:
         escribir_excel(out, res, esperado)
     except PermissionError:
         print(f"\n*** No se pudo guardar {out.name}: esta abierto en Excel. Cierralo y vuelve a correr el script.")
         return 1
-    escribir_detalle(folder / "detalle_lotes.txt", lecturas, res)
-    rev = folder / "revisar_a_mano.txt"
+    escribir_detalle(salida / "detalle_lotes.txt", lecturas, res)
+    rev = salida / "revisar_a_mano.txt"
     escribir_revision(rev, folder, lecturas, res, esperado, omitidos, sin_resultado, malos, correcciones,
                       _EXCEL, info_omitidos)
-    logf = folder / "sin_resultado.log"
+    logf = salida / "sin_resultado.log"
     if log:
         logf.write_text("\n".join(log) + "\n", encoding="utf-8")
     elif logf.exists():
@@ -1918,7 +1946,8 @@ def main(argv=None):
         print(f"{len(correcciones)} correccion(es) aplicadas; ver revisar_a_mano.txt")
     print(f"{len(omitidos)} omitidos por FALTA REVISION | {len(sin_resultado)} sin cantidades legibles")
     print(f"Revision: {rev}")
-    print(f"Detalle por lote: {folder / 'detalle_lotes.txt'}")
+    print(f"Detalle por lote: {salida / 'detalle_lotes.txt'}")
+    print(f"Todos los resultados estan en: {salida}")
     print(f"Excel: {out}")
     return 0
 

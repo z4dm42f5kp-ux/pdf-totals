@@ -20,14 +20,14 @@ python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 lotes_auto.py lee todos los archivos PDF en la carpeta FOLDER y en todos sus subcarpetas. Los documentos se refieren a la retirada de un producto del mercado: formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote el programa calcula tres cantidades:
 
 - La cantidad retirada (`Cantidad de producto retirado`). Estas son las piezas que fueron devueltas o recuperadas del mercado. Vienen de formularios de devolución, recibos de entrega y recibos de bienes.
-- La cantidad no distribuida (`Cantidad no distribuida`). Estas son las piezas que todavía están en inventario y nunca fueron distribuidas. Se toman del archivo de referencia Excel, que se describe a continuación. Sin el archivo de referencia Excel, proceden de documentos de inventario y del informe de retirada.
+- La cantidad no distribuida (`Cantidad no distribuida`). Estas son las piezas que todavía están en inventario y nunca fueron distribuidas. Se extraen del archivo de referencia Excel, que se describe a continuación. Sin el archivo de referencia Excel, vienen de los documentos de inventario y del informe de retiro.
 - La cantidad total para la destrucción (`Cantidad total para destrucción`). Esta es la suma de las otras dos cantidades.
 
 El programa revisa el resultado. Los límites se aplican a cada lote por su cuenta, no a la suma de una tabla: ningún lote puede tener más de piezas retiradas `48,042` o más de piezas `82,090` que no fueron distribuidas. Las cantidades retiradas de todos los lotes deben agregar exactamente `209,908`, las cantidades no distribuidas a exactamente `134,543`, y el total para la destrucción a exactamente `344,451`. Estos valores pueden cambiarse en la configuración o en la línea de comandos.
 
 ## El archivo de referencia Excel
 
-El programa busca un archivo Excel (.xlsx o .xlsm) en la carpeta FOLDER y en todas sus subcarpetas. Utiliza el primer archivo que tiene una columna cuyo título contiene `no distribuida`. También se puede administrar un archivo con la opción `--excel`. En este archivo el programa encuentra tres columnas: la columna con los números de lote, la columna con la cantidad no distribuida, y la columna cuyo título contiene `retirado`, que es la cantidad retirada según los clientes. Otras columnas, como el total de destrucción, son ignoradas.
+El programa busca el archivo Excel con el nombre `Retirado_retiro_producto_Traxicoll` (.xlsx o .xlsm) en la carpeta FOLDER y en todas sus subcarpetas. Si no hay archivo con este nombre, utiliza el primer archivo Excel que tiene una columna cuyo título contiene `no distribuida`. Un archivo en el formato antiguo .xls no se puede leer; abrirlo en Excel y guardarlo como un libro de trabajo .xlsx. También se puede administrar un archivo con la opción `--excel`. En este archivo el programa encuentra tres columnas: la columna con los números de lote, la columna con la cantidad no distribuida, y la columna cuyo título contiene `retirado`, que es la cantidad retirada según los clientes. Otras columnas, como el total de destrucción, son ignoradas.
 
 La cantidad no distribuida de cada lote se toma de este archivo, no de documentos PDF. La cantidad retirada todavía se calcula a partir de los documentos PDF, y el resultado de cada lote se compara con la cantidad retirada en el archivo Excel. Esta comparación muestra exactamente qué lote no coincide y qué documentos PDF contribuyen a él.
 
@@ -47,18 +47,18 @@ Primero, el programa encuentra las filas que contienen un número de lote. Las c
 
 Luego el programa decide qué columna contiene el número de piezas. Sólo se consideran columnas con números enteros. Números de filas, códigos que repiten en cada fila y años están excluidos. Se utilizan las siguientes pruebas, desde más fuerte hasta más débil:
 
-1. Cantidad multiplicada por el precio unitario igual al precio total en la misma fila. Por ejemplo, `4,408` multiplicado por `$27.00` es `$119,016.00`.
-2. La suma de la columna equivale a un número impreso en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
+1. Cantidades multiplicadas por el precio unitario igual al precio total en la misma fila. Por ejemplo, `4,408` multiplicado por `$27.00` es `$119,016.00`.
+2. La suma de la columna equivale a un número que se imprime en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
 3. El título de la columna. Títulos como `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` o `DEVUELTAS` cuentan a favor. Títulos como `FACTURADA` o `DISTRIBUIDA` cuentan con contra, porque describen la cantidad original y no la cantidad devuelta. Títulos con `CAJAS` cuentan contra, porque cuentan cajas y no piezas.
 
-Un informe de retiro es reconocido solo por aritmética. En un informe de retiro, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
+Un informe de retiro es reconocido solo por aritmética. En un informe de retirada, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
 
 - manufacturado menos distribuidos iguales no distribuidos;
 - no distribuido más retirado equivale al total para la destrucción.
 
 El programa encuentra las columnas que cumplen estas relaciones, por lo que los títulos de columna no son necesarios. La columna retirada es la que nunca es más grande que la columna distribuida. Si una fila del informe no cumple las relaciones, por ejemplo porque el OCR lee un dígito erróneamente, el programa utiliza las relaciones para recuperar el valor correcto.
 
-El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario, las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario dan cantidades no distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
+El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario no dan cantidades distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
 
 El programa también lee otros dos diseños:
 
@@ -67,7 +67,7 @@ El programa también lee otros dos diseños:
 
 ## Comprobaciones y correcciones
 
-Cada cantidad está marcada como verificada o no verificada. Una cantidad se verifica cuando las piezas multiplicadas por el precio unitario igual al precio total impreso, cuando la suma de su tabla equivale a un total impreso, o cuando el total de su lote equivale al informe de retirada.
+Cada cantidad está marcada como verificada o no verificada. Se verifica una cantidad cuando las piezas se multiplican por el precio unitario igual al precio total impreso, cuando la suma de su tabla equivale a un total impreso, o cuando el total de su lote equivale al informe de retirada.
 
 Si una tabla contradice su propio total impreso de piezas, y exactamente una fila no se verifica, el programa calcula el valor correcto de esa fila del total impreso. Utiliza el valor corregido sólo si el precio total impreso lo confirma. De lo contrario, el PDF está marcado como malo.
 
@@ -79,8 +79,8 @@ Si un lote excede su límite, no coincide con el informe de retirada, o el total
 
 - Si la otra lectura de exactamente un PDF hace que el lote coincida, esa lectura se utiliza.
 - Si una fila en un PDF es una copia exacta de una fila en otro PDF, y el lote coincide cuando se retira la copia, la copia no se cuenta.
-- Si una cantidad tiene un número de lote que no está en el archivo de referencia Excel, difiere de un lote en el archivo Excel por un dígito o por dos dígitos intercambiados, y hace que el lote coincida exactamente, el número de lote es corregido.
-- Si se leía un golpe de pluma o marca de verificación junto a un número como un dígito extra 1, 7 o 4, y eliminarlo hace que el lote coincida exactamente, el número es corregido.
+- Si una cantidad tiene un número de lote que no está en el archivo de referencia Excel, difiere de un lote en el archivo Excel por un dígito o por dos dígitos intercambiados, y hace que el lote coincida exactamente, el número de lote se corrige.
+- Si una marca de trazo de la pluma o marca de verificación junto a un número fue leído como un dígito extra 1, 7 o 4, y la eliminación hace que el lote coincida exactamente, el número es corregido.
 - Si la otra lectura de exactamente un PDF, o la eliminación de exactamente una fila copiada, hace que el total retirado sea exactamente igual a su total esperado, este cambio se aplica.
 
 Un PDF está marcado como malo sólo cuando la prueba es concluyente: cuando sus propios números contradicen sus propios totales impresos en cada lectura, o cuando contiene una copia exacta que es probada por un lote o por el total esperado. Todas las demás dudas se enumeran como sospechosas y no se cambian.
@@ -108,14 +108,14 @@ Opciones de lotes_auto.py:
 Opciones de diagnostico.py:
 
 - `PATH` es un solo archivo PDF, o una carpeta. Si es una carpeta, el programa examina todos los archivos PDF en ella.
-- `--lineas N` no muestra más que líneas N de texto para cada PDF. El valor predeterminado es 40.
+- `--lineas N` no muestra más que N líneas de texto para cada PDF. El valor predeterminado es 40.
 - `--segunda-lectura` utiliza la segunda lectura OCR, con una resolución más alta y más contraste.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
 ## Archivo de salida
 
-lotes_auto.py escribe los siguientes archivos en la carpeta FOLDER. Reemplaza los archivos existentes con los mismos nombres.
+lotes_auto.py crea la carpeta `resultados_lotes` dentro de la carpeta FOLDER y escribe los siguientes archivos en ella. Reemplaza los archivos existentes con los mismos nombres. La carpeta `resultados_lotes` se ignora cuando el programa busca documentos PDF y archivos Excel.
 
 `totales_lotes.xlsx` contiene el resultado en una hoja con el nombre `Lotes`. La hoja contiene tres tablas lado a lado: `Cantidad de producto retirado`, `Cantidad no distribuida` y `Cantidad total para destrucción`. Cada tabla tiene las columnas `Lote` y `Cantidad en Piezas` y una fila `TOTAL`. Las tres tablas enumeran los mismos lotes en el mismo orden, por lo que una fila se puede leer a través de las tablas. La tercera tabla y los totales son fórmulas, por lo que se actualizan cuando se cambia un número a mano. Debajo de cada tabla, la hoja muestra el total esperado y la diferencia. Las células de lotes que exceden un límite o no coinciden con el informe de retirada son rojas.
 
@@ -123,7 +123,7 @@ lotes_auto.py escribe los siguientes archivos en la carpeta FOLDER. Reemplaza lo
 
 `revisar_a_mano.txt` enumera todo lo que necesita una persona, en secciones numeradas: un resumen con los tres totales y sus valores esperados; una lista de acciones en el orden en que deben hacerse; los lotes que no coinciden, con cada cantidad que se encontró para ellos, los PDF sin cantidades legibles que los mencionan, los archivos `FALTA REVISION` que se mencionan, y una nota cuando tal archivo contiene exactamente la cantidad faltada; los lotes de Excel
 
-Los archivos cuyo nombre contiene `FALTA REVISION` sólo se leen para informar lo que contienen. Nunca cuentan con un total.
+Los archivos cuyo nombre contiene `FALTA REVISION` sólo se leen para informar de lo que contienen. Nunca cuentan con un total.
 
 `sin_resultado.log` contiene, para cada PDF que no produjo cantidad, la razón, el texto completo que el programa leyó de él y las decisiones que el programa tomó. Mira este archivo primero cuando un PDF no se lee correctamente.
 
@@ -152,6 +152,8 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 `MAX_RETIRADO_POR_LOTE` y `MAX_NO_DISTRIBUIDA_POR_LOTE` son los límites para un solo lote. No son límites para la suma de una tabla. Los valores predeterminados son `48042` y `82090`.
 
+`EXCEL_NOMBRE` es el nombre del archivo de referencia Excel que se busca primero. El valor predeterminado es `Retirado_retiro_producto_Traxicoll`. `CARPETA_RESULTADOS` es el nombre de la carpeta para los archivos de salida. El valor predeterminado es `resultados_lotes`.
+
 `EXCEL_REFERENCIA` es la ruta del archivo de referencia Excel. El valor predeterminado `None` significa que el archivo se registra en la carpeta y sus subcarpetas. `SOLO_LOTES_DEL_EXCEL` decide si las cantidades con un número de lote que no está en el archivo Excel se dejan fuera. El valor predeterminado es `True`.
 
 `USAR_REPORTE_PARA_RETIRADO` decide cómo se utilizan las cantidades retiradas de un informe de retiro. Con el valor predeterminado `False`, sólo se utilizan para comprobar los documentos de devolución. Con `True`, también se utilizan para lotes que no tienen documento de devolución en la carpeta.
@@ -166,7 +168,7 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 `PRIORIDAD_RENGLON` decide qué fila de cantidad se utiliza en formas en las que cada columna describe un producto.
 
-`SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para comprender los títulos de columna y reconocer el tipo de página.
+`SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para entender los títulos de columna y para reconocer el tipo de una página.
 
 ## Instalación
 
@@ -191,7 +193,7 @@ $d="$env:USERPROFILE\pdf-totals"; New-Item -ItemType Directory -Force "$d\python
 
 El paquete msvc-runtime copia los archivos de tiempo de ejecución Microsoft Visual C++ en la carpeta Python. El motor OCR necesita estos archivos, y algunos sistemas no los tienen. Puede ignorar las advertencias pip sobre scripts que se instalan en una carpeta que no está en PATH.
 
-Use `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
+Usa `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
 
 Para ejecutar el programa:
 
@@ -199,13 +201,13 @@ Para ejecutar el programa:
 & "$env:USERPROFILE\pdf-totals\python\python.exe" "$env:USERPROFILE\pdf-totals\lotes_auto.py" "C:\path\to\pdfs"
 ```
 
-Si las descargas están bloqueadas en el ordenador, descargue los archivos `python-3.12.10-embed-amd64.zip` y `get-pip.py` en otro ordenador. Copiarlos en la carpeta Descargas. Luego, reemplace los dos pasos `Invoke-WebRequest` en el comando con los caminos de estos archivos.
+Si las descargas están bloqueadas en el ordenador, descargue los archivos `python-3.12.10-embed-amd64.zip` y `get-pip.py` en otro ordenador. Copiarlos en la carpeta Descargas. Luego reemplace los dos pasos `Invoke-WebRequest` en el comando con los caminos de estos archivos.
 
 Estas instrucciones son para procesadores de 64 bits de Intel y AMD. Para Windows en procesadores ARM, utilice `python-3.12.10-embed-arm64.zip` en su lugar. Esto no ha sido probado.
 
 ### macOS
 
-Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). Luego ejecute el siguiente comando en la aplicación Terminal:
+Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). A continuación, ejecute el siguiente comando en la aplicación Terminal:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -237,7 +239,7 @@ Para ejecutar el programa:
 
 Los párrafos siguientes explican cómo obtener `Python 3.12` en distribuciones comunes de Linux.
 
-Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario de root:
+Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario root:
 
 ```
 sudo apt install python3-venv curl
@@ -277,7 +279,7 @@ Si su sistema Alpine Linux utiliza `sudo` en lugar de `doas`, reemplace `doas` c
 
 En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderizado PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
 
-El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography está instalado de los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
+El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography se instala desde los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
 
 En FreeBSD, ejecute el primer comando como el usuario root, por ejemplo con `su` o `sudo`:
 
@@ -289,7 +291,7 @@ pkg install py311-pip py311-cryptography
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
 ```
 
-Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. A continuación, utilice el comando matching en lugar de `python3.11`, por ejemplo `python3.12`.
+Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. Luego utilice el comando matching en lugar de `python3.11`, por ejemplo `python3.12`.
 
 En OpenBSD, ejecute el primer comando como el usuario root con `doas`:
 
@@ -321,7 +323,7 @@ Para ejecutar el programa en FreeBSD, OpenBSD o NetBSD:
 
 ## Actualización
 
-Para actualizar el programa, descargue los dos scripts de nuevo. En Windows:
+Para actualizar el programa, descargar los dos scripts de nuevo. En Windows:
 
 ```
 curl.exe -L -o "$env:USERPROFILE\pdf-totals\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py; curl.exe -L -o "$env:USERPROFILE\pdf-totals\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -341,10 +343,10 @@ Después de un cambio, GitHub puede entregar la versión anterior durante unos m
 
 El archivo Excel no se puede guardar. El programa se detiene con código de retorno 1 cuando totales_lotes.xlsx está abierto en Excel. Cierre el archivo y ejecute el programa de nuevo.
 
-El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retirada, y qué PDFs contribuyen a ellos. Entonces busca estos lotes en detalle_lotes.txt. Las causas comunes son:
+El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retiro, y qué PDFs contribuyen a ellos. Entonces busca estos lotes en detalle_lotes.txt. Las causas comunes son:
 
 - Un PDF que pertenece a la retirada falta de la carpeta, o se llama `FALTA REVISION`.
-- El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se observa como `dudosa`.
+- El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se señala como `dudosa`.
 - El mismo documento está en la carpeta dos veces bajo nombres diferentes.
 - El programa utilizó la columna equivocada para la cantidad, porque el documento utiliza un diseño que el programa no sabe. Ejecute diagnostico.py con este PDF para ver qué columna fue elegida y por qué.
 

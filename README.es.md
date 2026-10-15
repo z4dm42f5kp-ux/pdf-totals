@@ -1,26 +1,26 @@
 # pdf-totals
 
-Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
+Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
 Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals lee una carpeta de documentos PDF sobre una memoria de producto, como formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote calcula tres cantidades y las escribe a un archivo Excel:
+pdf-totals lee una carpeta de documentos PDF sobre la retirada de un producto del mercado, como formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote calcula tres cantidades y las escribe a un archivo Excel:
 
 - la cantidad retirada: piezas que fueron devueltas o recuperadas del mercado;
 - la cantidad no distribuida: piezas que aún están en inventario;
 - la cantidad total para la destrucción: la suma de ambos.
 
-El programa no depende solamente de las palabras en los documentos. Examina la estructura de cada tabla: que columna contiene números enteros, que columna multiplicada por el precio unitario da la cantidad impresa, y que columna añade hasta un total impreso. En un informe de memoria encuentra las columnas por aritmética, porque menos fabricado distribuido no es igual a no distribuido, y no distribuido más retirado equivale al total.
+El programa no depende solamente de las palabras en los documentos. Examina la estructura de cada tabla: que columna contiene números enteros, que columna multiplicada por el precio unitario da el precio total impreso, y que columna suma hasta un total impreso. En un informe de retirada encuentra las columnas por aritmética, porque menos fabricado distribuidos no es igual a no distribuido, y no distribuidos más retirado es igual al total.
 
-El programa revisa el resultado. Un lote no debe exceder piezas retiradas `48,042` o piezas `82,090` que no fueron distribuidas, y el total para la destrucción debe ser exactamente `344,451`. Si algo no coincide, los PDF escaneados dudosos son leídos por segunda vez, las diferencias se corren sólo cuando existe una prueba exacta, y los PDF están marcados como malos sólo en pruebas concluyentes.
+El programa revisa el resultado. Un lote no debe exceder piezas retiradas `48,042` o piezas `82,090` que no fueron distribuidas, y el total para la destrucción debe ser exactamente `344,451`. Si algo no coincide, los PDF escaneados dudosos son leídos por segunda vez, las diferencias son corregidas sólo cuando existe una prueba exacta, y los PDF están marcados como malos sólo en evidencia concluyente.
 
-El programa lee el texto de PDF que contiene texto y lee PDF escaneados con reconocimiento de caracteres ópticos (OCR). Fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `24`, `25` o `26`. Estas reglas son fáciles de cambiar.
+El programa lee el texto de PDF que contiene texto y lee PDF escaneados con reconocimiento de caracteres ópticos (OCR). Fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y comenzar con `24`, `25` o `26`. Estas reglas son fáciles de cambiar.
 
 ## Necesidades
 
 - Python 3.9 o una versión más nueva. `Python 3.12` se recomienda, ya que el motor OCR preferido soporta las versiones de Python hasta `Python 3.12`.
 - Los paquetes Python pdfplumber y openpyxl.
-- Para PDF escaneados: el paquete rapidocr_onnxruntime con `Python 3.12` o una versión anterior, o los paquetes rapidocr y onnxruntime con `Python 3.13` o una versión más reciente.
+- Para PDF escaneado: el paquete rapidocr_onnxruntime con `Python 3.12` o una versión anterior, o los paquetes rapidocr y onnxruntime con `Python 3.13` o una versión más reciente.
 
 En Windows y macOS no necesita derechos de administrador. En Linux y en los sistemas BSD, necesita que el usuario root instale Python desde los paquetes del sistema. En Linux se puede evitar esto con el programa uv, como describe el manual.
 
@@ -79,7 +79,7 @@ El manual describe todas las opciones, los diseños compatibles, los archivos de
 - Deutsch: [docs/de/MANUAL.md](docs/de/MANUAL.md)
 - Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 
-Los documentos alemán y español se traducen automáticamente de los documentos ingleses con Argos Translate. Si una traducción difiere del documento en inglés, se aplica el documento en inglés.
+Los documentos alemán y español se traducen automáticamente de los documentos ingleses con Argos Translate. Si una traducción difiere del documento inglés, se aplica el documento inglés.
 
 ## Licencia
 

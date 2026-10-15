@@ -1,10 +1,12 @@
-# pdf-totals
+# tute-lote
 
 Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate übersetzt. Wenn es sich vom englischen Original unterscheidet, gilt das englische Original.
 
+![tute-lote logo](docs/logo.svg)
+
 Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals liest einen Ordner mit PDF-Dokumenten über die Rücknahme eines Produkts vom Markt, wie Rückgabeformulare, Lieferbelege, Warenbelege, Inventarlisten und Rücknahmeberichte. Für jede Chargennummer berechnet es drei Mengen und schreibt sie in eine Excel-Datei:
+tute-lote liest einen Ordner mit PDF-Dokumenten über die Rücknahme eines Produkts vom Markt, wie Rückgabeformulare, Lieferbelege, Warenbelege, Inventarlisten und Rücknahmeberichte. Für jede Chargennummer berechnet es drei Mengen und schreibt sie in eine Excel-Datei:
 
 - die aus dem Markt genommene Menge: Stücke, die zurückgegeben oder vom Markt zurückgewonnen wurden;
 - die nicht verteilte Menge: Stücke, die sich noch im Bestand befinden, entnommen aus einer Excel-Referenzdatei;
@@ -31,19 +33,19 @@ OCR ist unter Windows, macOS und Linux-Distributionen verfügbar, die glibc verw
 Windows 10 und Windows 11 in PowerShell, ohne Administratorrechte:
 
 ```
-$d="$env:USERPROFILE\pdf-totals"; New-Item -ItemType Directory -Force "$d\python" | Out-Null; Invoke-WebRequest -UseBasicParsing https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile "$env:TEMP\py-embed.zip"; Expand-Archive -Force "$env:TEMP\py-embed.zip" "$d\python"; (Get-Content "$d\python\python312._pth") -replace '^#\s*import site','import site' | Set-Content "$d\python\python312._pth"; Invoke-WebRequest -UseBasicParsing https://bootstrap.pypa.io/get-pip.py -OutFile "$d\python\get-pip.py"; & "$d\python\python.exe" "$d\python\get-pip.py" --no-warn-script-location; & "$d\python\python.exe" -m pip install pdfplumber openpyxl rapidocr_onnxruntime msvc-runtime; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
+$d="$env:USERPROFILE\tute-lote"; New-Item -ItemType Directory -Force "$d\python" | Out-Null; Invoke-WebRequest -UseBasicParsing https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile "$env:TEMP\py-embed.zip"; Expand-Archive -Force "$env:TEMP\py-embed.zip" "$d\python"; (Get-Content "$d\python\python312._pth") -replace '^#\s*import site','import site' | Set-Content "$d\python\python312._pth"; Invoke-WebRequest -UseBasicParsing https://bootstrap.pypa.io/get-pip.py -OutFile "$d\python\get-pip.py"; & "$d\python\python.exe" "$d\python\get-pip.py" --no-warn-script-location; & "$d\python\python.exe" -m pip install pdfplumber openpyxl rapidocr_onnxruntime msvc-runtime; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 macOS, wenn `Python 3.12` installiert ist:
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 Linux, wenn `Python 3.12` installiert ist:
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && venv/bin/pip uninstall -y opencv-python && venv/bin/pip install opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && venv/bin/pip uninstall -y opencv-python && venv/bin/pip install opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 Das Handbuch beschreibt die Installation auf anderen Linux-Distributionen und auf FreeBSD, OpenBSD und NetBSD.
@@ -53,13 +55,13 @@ Das Handbuch beschreibt die Installation auf anderen Linux-Distributionen und au
 Windows:
 
 ```
-& "$env:USERPROFILE\pdf-totals\python\python.exe" "$env:USERPROFILE\pdf-totals\lotes_auto.py" "C:\path\to\pdfs"
+& "$env:USERPROFILE\tute-lote\python\python.exe" "$env:USERPROFILE\tute-lote\lotes_auto.py" "C:\path\to\pdfs"
 ```
 
 macOS, Linux, FreeBSD, OpenBSD und NetBSD:
 
 ```
-~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
+~/tute-lote/venv/bin/python ~/tute-lote/lotes_auto.py /path/to/pdfs
 ```
 
 Das Programm durchsucht auch alle Unterordner. Es überspringt jede Datei, deren Name `FALTA REVISION` enthält. Die Excel-Referenzdatei ist die Datei `Retirado_retiro_producto_Traxicoll.xlsx` im Ordner oder in einem Unterordner. Wenn das Programm beendet ist, enthält der Ordner `resultados_lotes` im Ordner diese Dateien:
@@ -83,6 +85,14 @@ Das Handbuch beschreibt alle Optionen, die unterstützten Layouts, die Ausgabeda
 - Español: [docs/es/MANUAL.md](docs/es/MANUAL.md)
 
 Die deutschen und spanischen Dokumente werden automatisch aus den englischen Dokumenten mit Argos Translate übersetzt. Wenn eine Übersetzung vom englischen Dokument abweicht, gilt das englische Dokument.
+
+## Beispieldokumente und Tests
+
+Der Ordner `examples` enthält 120 erfundene PDF-Dokumente, eine Excel-Referenzdatei und das erwartete Ergebnis. Verwenden Sie sie, um das Programm ohne echte Dokumente auszuprobieren. Der Befehl `python tools/check_examples.py` führt das Programm auf diesen Dokumenten aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis. Die automatischen Tests auf GitHub führen nach jeder Änderung den gleichen Befehl aus.
+
+## Freigaben und Sicherheit
+
+`RELEASES.txt` beschreibt die stabilen und rollenden Releases und wie man eine bestimmte Version herunterlädt. `SECURITY.md` beschreibt, wie man eine Schwachstelle meldet und wie das Programm vertrauliche Dokumente schützt. `AGENTS.md` enthält die Regeln für KI-Agenten, die das Programm ausführen oder ändern, einschließlich der Regeln für Anweisungen, die in Dokumenten verborgen sind.
 
 ## Lizenz
 

@@ -2,60 +2,88 @@
 
 ## Name
 
-lotes_auto.py - calculate the total number of pieces for each batch number in a folder of PDF documents
+lotes_auto.py - calculate, for each batch number, the pieces that were withdrawn, the pieces that were not distributed and the total number of pieces for destruction
 
 diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF documents
 
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] PATH
+python lotes_auto.py [-h] [--version] [--total-esperado N] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 ```
 
 ## Description
 
-lotes_auto.py searches the folder FOLDER and all of its subfolders for files whose name ends in .pdf. In each PDF it finds every batch number and the number of pieces that the document records for that batch. It then calculates the total number of pieces of each batch over all documents and writes one row per batch to an Excel workbook. When a batch appears in several documents, or several times in one document, its quantities are added together.
+lotes_auto.py reads all PDF files in the folder FOLDER and in all of its subfolders. The documents are about a product recall: return forms, delivery receipts, goods receipts, inventory lists and recall reports. For each batch number the program calculates three quantities:
+
+- The withdrawn quantity (`Cantidad de producto retirado`). These are the pieces that were returned or recovered from the market. They come from return forms, delivery receipts and goods receipts.
+- The not distributed quantity (`Cantidad no distribuida`). These are the pieces that are still in inventory and were never distributed. They come from inventory documents. If a batch has no inventory document, the quantity is taken from the recall report.
+- The total quantity for destruction (`Cantidad total para destrucción`). This is the sum of the two other quantities.
+
+The program then checks the result. A batch must not have more than `48,042` withdrawn pieces or more than `82,090` pieces that were not distributed. The total quantity for destruction of all batches must be exactly `344,451`. These limits can be changed in the configuration.
 
 When a PDF contains text, the program reads the text directly. When a page contains no text, the program treats the page as a scanned image and reads it with optical character recognition (OCR). If no OCR engine is installed, the program does not read scanned PDFs and lists them for manual review.
 
 The program was written for documents about returned pharmaceutical products in Mexico. All messages and output files are in Spanish. This manual explains their meaning.
 
-diagnostico.py uses exactly the same code as lotes_auto.py to read and analyse documents. It shows the text that it read from each PDF, what it detected in that text, and the result. Use it to examine a PDF that is not read correctly. It does not write any files.
+diagnostico.py uses exactly the same code as lotes_auto.py to read and analyse documents. It shows the text that it read from each PDF, the decisions that it made and the result. Use it to examine a PDF that is not read correctly. It does not write any files.
 
-## Supported layouts
+## How the program finds the quantities
 
-The program recognizes four layouts. It examines each page in the order given here and uses the first layout that produces results for that page.
+The program does not rely only on the words in the documents. It examines the structure of each table and uses arithmetic to decide which number is which.
 
-1. Forms in which each column describes one product. One row has a batch label, such as `Lote`, and contains one batch number per column. Other rows have a quantity label, such as `Cantidad Recibida` or `Cantidad Facturada`, and contain the quantity of each product in the same column. If there are several quantity rows, the program chooses one by the priority that is described in the section Configuration.
+First, the program finds the rows that contain a batch number. The columns of the table are formed from the positions of the values in these rows. Every value is classified as a batch number, a date, an amount of money, a whole number, a code or text.
 
-2. Tables with column titles. A column title such as `CANTIDAD`, `PIEZAS` or `No. de piezas` marks the quantity column, and the program reads the values below it. The program takes the batch number from a column with a title such as `LOTE`. If there is no such column, it takes the batch number from any other place in the same row, for example from the description, or from the next two rows. A column title that is written on two lines, such as `PIEZAS` above `DEVUELTAS`, is read as one title.
+Then the program decides which column contains the number of pieces. Only columns with whole numbers are considered. Row numbers, codes that repeat in every row and years are excluded. The following evidence is used, from strongest to weakest:
 
-3. Text lines with labels, in which the batch comes first. An example is a line `LOTE: 25240310` followed by a line `CANTIDAD EN PIEZAS: 1,250`. The program pairs each batch with the first quantity that follows it.
+1. Pieces multiplied by the unit price equal the amount in the same row. For example, `4,408` multiplied by `$27.00` is `$119,016.00`.
+2. The sum of the column equals a number that is printed elsewhere in the document, for example `TOTAL DE PIEZAS 6,889` or `No CAJAS / PIEZAS 1978`.
+3. The title of the column. Titles such as `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` or `DEVUELTAS` count in favour. Titles such as `FACTURADA` or `DISTRIBUIDA` count against, because they describe the original quantity and not the returned quantity. Titles with `CAJAS` count against, because they count boxes and not pieces.
 
-4. Text lines with labels, in which the quantity comes first. The program pairs each quantity with the first batch that follows it. The first label in the document decides whether the document uses layout 3 or layout 4.
+A recall report is recognized by arithmetic alone. In a recall report, each row contains five numbers for a batch, and two relations hold in every row:
 
-These words are recognized as batch labels: `lote`, `serie`, `serial`, `n/s` and `s/n`. They may be combined with `No.`, `Num.` or `Numero`.
+- fabricated minus distributed equals not distributed;
+- not distributed plus withdrawn equals the total for destruction.
 
-These words are recognized as quantity labels: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.` and `uds`.
+The program finds the columns that fulfil these relations, so the column titles are not needed. The withdrawn column is the one that is never larger than the distributed column. If a row of the report does not fulfil the relations, for example because the OCR read a digit wrongly, the program uses the relations to recover the correct value.
 
-These words are also recognized as quantity column titles: `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` and `viales`.
+The type of each quantity is decided as follows. A quantity is not distributed if its column title or row title says so, for example `EXISTENCIA`, `INVENTARIO` or `NO DISTRIBUIDO`. Otherwise the words of the whole page decide: pages about returns, withdrawals or receipts give withdrawn quantities, and pages about inventory give not distributed quantities. If a page has no clear type, the type of the other pages of the same PDF is used. If the PDF has no clear type, the quantity counts as withdrawn and a note is added.
 
-The word `unidad` alone does not mark a quantity, because it names the unit of measure. The word `cajas` is never used, because it counts boxes and not pieces.
+The program also reads two other layouts:
+
+- Forms in which each column describes one product. One row contains the batch numbers, and other rows contain quantities such as `Cantidad Recibida` or `Cantidad Facturada`. The row is chosen by the priority that is described in the section Configuration.
+- Text lines with labels, such as a line `LOTE: 25240310` and a line `CANTIDAD EN PIEZAS: 1,250`.
+
+## Checks and corrections
+
+Every quantity is marked as verified or not verified. A quantity is verified when pieces multiplied by the price equal the printed amount, when the sum of its table equals a printed total, or when the total of its batch equals the recall report.
+
+If a table contradicts its own printed total of pieces, and exactly one row is not verified, the program calculates the correct value of that row from the printed total. It uses the corrected value only if the printed amount of money confirms it. Otherwise, the PDF is marked as bad.
+
+A batch that appears several times in the same PDF is counted once when the quantity is the same. This happens, for example, when a PDF contains the same document twice. A page whose quantity is the sum of the other pages is not counted. If the same batch appears on several pages with different quantities, the quantities are added, and the PDF is listed for review.
+
+If a batch exceeds its limit, does not match the recall report, or the total does not match the expected total, the program reads the doubtful scanned PDFs a second time with a higher resolution and more contrast. Then it tries to explain each difference exactly and without ambiguity:
+
+- If the other reading of exactly one PDF makes the batch match, that reading is used.
+- If a row in one PDF is an exact copy of a row in another PDF, and the batch matches when the copy is removed, the copy is not counted.
+- If the other reading of exactly one PDF, or the removal of exactly one copied row, makes the total exactly equal to the expected total, this change is applied.
+
+A PDF is marked as bad only when the proof is conclusive: when its own numbers contradict its own printed totals in every reading, or when it contains an exact copy that is proven by a batch or by the expected total. All other doubts are listed as suspicious and are not changed.
 
 ## Rules for every value
 
-- A batch number has exactly eight digits and starts with `24`, `25` or `26`. The program ignores all other numbers, for example prices, amounts, dates and product codes. If the OCR attaches other characters to a batch number, such as a vertical bar, the program removes them.
-- The program reads numbers in Mexican notation. A comma separates the thousands and a point separates the decimals. For example, `1,250` is one thousand two hundred and fifty, and `1,250.50` is one thousand two hundred and fifty and a half.
-- The program ignores quantities that have decimals, and quantities that are zero or negative, because a number of pieces is always a whole number. This rule also prevents prices from being counted as pieces.
+- A batch number has exactly eight digits and starts with `24`, `25` or `26`. The program ignores all other numbers, for example prices, amounts, dates, invoice numbers and product codes. If the OCR attaches other characters to a batch number, such as a vertical bar, the program removes them.
+- The program reads numbers in Mexican notation. A comma separates the thousands and a point separates the decimals. For example, `1,250` is one thousand two hundred and fifty, and `1,250.50` is one thousand two hundred and fifty and a half. A number such as `4.408`, where the OCR read the comma as a point, is read as `4,408`, because pieces are always whole numbers.
+- Handwritten check marks next to a number, such as `695 ✓`, are ignored.
 - The program skips every file whose name contains `FALTA REVISION`. The program ignores the difference between upper case and lower case, and the O may have an accent. Skipped files do not count towards any total.
-- If a single quantity is greater than `50,000`, the program still adds it to the total. When the program finishes, it reports such quantities as suspicious.
 
 ## Options
 
 Options of lotes_auto.py:
 
 - `FOLDER` is the folder that contains the PDF files. Subfolders are included.
+- `--total-esperado N` sets the expected total for destruction. The default value is `344,451`. The value 0 switches the check off.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
@@ -63,37 +91,36 @@ Options of diagnostico.py:
 
 - `PATH` is a single PDF file, or a folder. If it is a folder, the program examines all PDF files in it.
 - `--lineas N` shows no more than N lines of text for each PDF. The default value is 40.
+- `--segunda-lectura` uses the second OCR reading, with a higher resolution and more contrast.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
 ## Output files
 
-lotes_auto.py writes the following files into the folder FOLDER. It replaces existing files with the same names. If a file would be empty, the program deletes it instead.
+lotes_auto.py writes the following files into the folder FOLDER. It replaces existing files with the same names.
 
-`totales_lotes.xlsx` contains the result. It has one sheet with the name `Lotes`. The sheet has two columns, `Lote` and `Cantidad en Piezas`, and one row for each batch. The rows are sorted by batch number. The quantities are stored as numbers and are shown with digit grouping, for example `1,406`.
+`totales_lotes.xlsx` contains the result on one sheet with the name `Lotes`. The sheet contains three tables side by side: `Cantidad de producto retirado`, `Cantidad no distribuida` and `Cantidad total para destrucción`. Each table has the columns `Lote` and `Cantidad en Piezas` and a row `TOTAL`. All three tables list the same batches in the same order, so a row can be read across the tables. The third table and the totals are formulas, so they are updated when you change a number by hand. Below the third table, the sheet shows the expected total and the difference. Cells of batches that exceed a limit or do not match the recall report are red.
 
-`detalle_lotes.txt` lists every amount that was added to each batch, together with the name of the PDF that contains the amount. Use this file to find the source of a total that looks wrong.
+`detalle_lotes.txt` lists, for every batch, each quantity that was found, the PDF and page that contain it, whether it is verified and why, and whether it was counted. It also shows the values of the recall report. Use this file to find the source of a total that looks wrong.
 
-`revisar_a_mano.txt` has two sections. The first section lists the files that were skipped because their name contains `FALTA REVISION`. The second section lists the PDFs from which no quantity could be read, each with the reason. The possible reasons are: no readable quantities; a scanned PDF and no OCR engine; an error while reading the file.
+`revisar_a_mano.txt` lists everything that needs a person: a summary with the totals and the expected total, the PDFs that are marked as bad and why, the corrections that were applied, the batches that exceed a limit or do not match the recall report together with their PDFs, the suspicious PDFs, the batches that are repeated within a PDF, the batches that appear with the same quantity in several PDFs, the PDFs without readable quantities, and the files that were skipped because of `FALTA REVISION`.
 
-`sin_resultado.log` contains, for every PDF that produced no quantity, the reason and the complete text that the program read from it. Look at this file first when a PDF is not read correctly.
+`sin_resultado.log` contains, for every PDF that produced no quantity, the reason, the complete text that the program read from it and the decisions that the program made. Look at this file first when a PDF is not read correctly.
 
 ## Console messages
 
-While it runs, lotes_auto.py shows one line for each PDF. The text after the arrow has the following meaning:
+While it runs, lotes_auto.py shows one line for each PDF. The text after the arrow says how many withdrawn and not distributed quantities were read, whether the PDF is a recall report, and whether the text was read directly (`texto`) or with OCR (`OCR`). Other messages:
 
-- `-> N cantidades (texto)` means that the program read N quantities from a PDF that contains text.
-- `-> N cantidades (OCR)` means that the program read N quantities from a scanned PDF.
-- `-> 0 cantidades` means that the program read no quantity. The file sin_resultado.log shows the text that it read.
 - `-> omitido (FALTA REVISION)` means that the program skipped the file because of its name.
 - `-> escaneado, OCR no disponible` means that the PDF is scanned and that no OCR engine is installed.
 - `-> ERROR` means that the program could not open or read the file.
+- `Segunda lectura` means that the program reads doubtful scanned PDFs a second time.
 
-At the end, the program shows the number of batches and quantities and the names of the files that it wrote. If a single quantity is greater than `50,000`, it also shows a list of these quantities under the title `cantidades sospechosamente grandes`.
+At the end, the program shows the three totals and compares the total for destruction with the expected total. The word `COINCIDE` means that the totals are equal. Otherwise the difference is shown. Then it lists the PDFs that are marked as bad.
 
 ## Return values of the program
 
-- `0` means that the program finished successfully.
+- `0` means that the program finished. Check the summary to see whether the totals match.
 - `1` means that the program could not write the Excel file. Usually the file is open in Excel.
 - `2` means that the arguments are not valid, or that the folder does not exist.
 
@@ -101,15 +128,23 @@ At the end, the program shows the number of batches and quantities and the names
 
 The settings are at the beginning of the file lotes_auto.py. You can change them with any text editor. Save the file in the UTF-8 encoding.
 
-`LOTE_WORDS` and `CANT_WORDS` are regular expressions. They contain the words that mark batch numbers and quantities.
+`TOTAL_ESPERADO` is the expected total for destruction. The default value is `344451`. The value `None` switches the check off.
 
-`PRIORIDAD_CANTIDAD` decides which quantity column or row is used when a document has several. The program uses the first word in this list that appears in a column title. The default list is `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. This means that a column about pieces or about returned goods is preferred, and that an invoiced quantity is used only if no other quantity exists.
+`MAX_RETIRADO_POR_LOTE` and `MAX_NO_DISTRIBUIDA_POR_LOTE` are the limits for each batch. The default values are `48042` and `82090`.
 
-`AVISO_CANTIDAD_GRANDE` is the limit above which a single quantity is reported as suspicious. The default value is `50000`.
+`USAR_REPORTE_PARA_RETIRADO` decides how the withdrawn quantities of a recall report are used. With the default value `False`, they are only used to check the return documents. With `True`, they are also used for batches that have no return document in the folder.
+
+`DUPLICADOS_EN_ARCHIVO` decides how a batch that is repeated in the same PDF is counted. With the default value `iguales`, it is counted once only when the quantities are equal. With `todos`, it is always counted once, and the largest quantity is kept.
 
 `OMITIR_NOMBRE` is the pattern for the names of files that are skipped. The default value matches `FALTA REVISION`.
 
 `LOTE_ID` is the pattern for a valid batch number. The default value accepts exactly eight digits that start with `24`, `25` or `26`. For example, to also accept batch numbers that start with `27`, change `2[456]` to `2[4567]`.
+
+`OCR_DPI` and `OCR_DPI_REINTENTO` are the resolutions of the first and the second OCR reading. `CONFIANZA_MINIMA` is the OCR confidence below which a quantity that is not verified is listed as suspicious.
+
+`PRIORIDAD_RENGLON` decides which quantity row is used in forms in which each column describes one product.
+
+`SEMANTICA` and `TIPO_DOCUMENTO` contain the words that are used as one signal among others to understand column titles and to recognize the type of a page.
 
 ## Installation
 
@@ -284,13 +319,14 @@ After a change, GitHub can deliver the previous version for a few minutes. To ge
 
 The Excel file cannot be saved. The program stops with return code 1 when totales_lotes.xlsx is open in Excel. Close the file and run the program again.
 
-All or many PDFs show `0 cantidades`. Run diagnostico.py with one of these PDFs. If the text that it shows is empty, the PDF is scanned and the OCR does not read it. If the text is there but nothing is detected, the program does not know the labels or the layout of the document. The text shows which words the document uses. The same text is in sin_resultado.log. You can add these words to the configuration.
+The total does not match the expected total. Open revisar_a_mano.txt. The section about batches that do not match shows which batches exceed a limit or differ from the recall report, and which PDFs contribute to them. Then search for these batches in detalle_lotes.txt. Common causes are:
 
-A total is much too large. Search for the batch number in detalle_lotes.txt. This file shows every amount that was added and the name of the PDF that contains it. These are common causes:
+- A PDF that belongs to the recall is missing from the folder, or is named `FALTA REVISION`.
+- The OCR read a digit wrongly. The two readings of a PDF are compared, and a difference between them is noted as `dudosa`.
+- The same document is in the folder twice under different names.
+- The program used the wrong column for the quantity, because the document uses a layout that the program does not know. Run diagnostico.py with this PDF to see which column was chosen and why.
 
-- The program used the wrong column for the quantity, because the document uses a column title that the program does not know.
-- The OCR joined two numbers that are close together into one number.
-- The same PDF is in the folder twice.
+All or many PDFs show no quantities. Run diagnostico.py with one of these PDFs. If the text that it shows is empty, the PDF is scanned and the OCR does not read it. If the text is there but nothing is detected, the program does not know the layout of the document.
 
 The OCR cannot be loaded on Windows, and the message contains `DLL load failed`. Install the package msvc-runtime as shown in the instructions for Windows.
 
@@ -300,11 +336,11 @@ pip cannot install rapidocr_onnxruntime. This package supports Python versions u
 
 ## Limitations
 
-The OCR reads handwritten numbers when they are written clearly. It does not reliably read handwriting that is hard to read, check marks, or handwritten abbreviations such as `N/A`. PDFs with quantities that cannot be read are listed in revisar_a_mano.txt and must be checked by a person.
+The OCR reads handwritten numbers when they are written clearly. It does not reliably read handwriting that is hard to read, or handwritten abbreviations such as `N/A`. Quantities that are written by hand into a form are therefore often not read. These PDFs are listed in revisar_a_mano.txt and must be checked by a person.
 
-The OCR can read a digit wrongly, especially when a scan is blurred or tilted. Compare some totals from scanned PDFs with detalle_lotes.txt.
+The OCR can read a digit wrongly, especially when a scan is blurred. Quantities that are verified by a price, a printed total or the recall report are reliable. Quantities that are not verified should be compared with the PDF.
 
-The format of a batch number is set by `LOTE_ID`. The program ignores batch numbers in other formats until the pattern is changed.
+The second OCR reading takes time. When the total does not match, all scanned PDFs with quantities that are not verified are read again, so a run can take about twice as long.
 
 The program expects quantities to be whole numbers of pieces. It does not convert documents that count boxes or other units.
 

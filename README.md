@@ -2,11 +2,17 @@
 
 Languages: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals reads a folder of PDF documents, such as invoices, delivery notes and forms for returned products. It finds every batch number and the number of pieces that is recorded for each batch. It then writes the total number of pieces for each batch to an Excel file.
+pdf-totals reads a folder of PDF documents about a product recall, such as return forms, delivery receipts, goods receipts, inventory lists and recall reports. For each batch number it calculates three quantities and writes them to an Excel file:
 
-The program reads the text of PDFs that contain text. It reads scanned PDFs with optical character recognition (OCR). It recognizes several common layouts: tables with a batch column and a quantity column, tables in which the batch number is part of the description, forms in which each column describes one product, and lines with labels such as `LOTE: 25240310` and `CANTIDAD: 1,250`.
+- the withdrawn quantity: pieces that were returned or recovered from the market;
+- the not distributed quantity: pieces that are still in inventory;
+- the total quantity for destruction: the sum of both.
 
-The program was written for documents about returned pharmaceutical products in Mexico. Its messages and output files are in Spanish. A batch number must have exactly eight digits and start with `24`, `25` or `26`. This rule is easy to change.
+The program does not rely only on the words in the documents. It examines the structure of each table: which column contains whole numbers, which column multiplied by the unit price gives the printed amount, and which column adds up to a printed total. In a recall report it finds the columns by arithmetic, because fabricated minus distributed equals not distributed, and not distributed plus withdrawn equals the total.
+
+The program then checks the result. A batch must not exceed `48,042` withdrawn pieces or `82,090` pieces that were not distributed, and the total for destruction must be exactly `344,451`. If something does not match, doubtful scanned PDFs are read a second time, differences are corrected only when an exact proof exists, and PDFs are marked as bad only on conclusive evidence.
+
+The program reads the text of PDFs that contain text and reads scanned PDFs with optical character recognition (OCR). It was written for documents about returned pharmaceutical products in Mexico. Its messages and output files are in Spanish. A batch number must have exactly eight digits and start with `24`, `25` or `26`. These rules are easy to change.
 
 ## Requirements
 
@@ -56,9 +62,9 @@ macOS, Linux, FreeBSD, OpenBSD and NetBSD:
 
 The program also searches all subfolders. It skips every file whose name contains `FALTA REVISION`. When the program finishes, the folder contains these files:
 
-- totales_lotes.xlsx contains one row for each batch with the total number of pieces.
-- detalle_lotes.txt lists every amount that was added to each batch and the name of the PDF that contains it.
-- revisar_a_mano.txt lists the skipped PDFs and the PDFs from which no quantity could be read.
+- totales_lotes.xlsx contains three tables side by side on one sheet: withdrawn, not distributed, and total for destruction, each with the batch number and the number of pieces.
+- detalle_lotes.txt lists every quantity of each batch, the PDF that contains it and whether it is verified.
+- revisar_a_mano.txt lists the PDFs that are marked as bad, the corrections, the batches that do not match, the suspicious PDFs and the PDFs from which no quantity could be read.
 - sin_resultado.log contains the text that was read from each PDF that produced no quantity.
 
 To see what the program reads and detects in one PDF, run diagnostico.py with the path of the PDF. diagnostico.py does not write any files.

@@ -113,7 +113,7 @@ are common.
 
 ## 3. Repository and git workflow
 
-- Repo: **github.com/z4dm42f5kp-ux/tute-lote** (public, MIT; renamed from `pdf-totals`, GitHub redirects the old URLs). Local clone used so far:
+- Repo: **github.com/z4dm42f5kp-ux/tute-lote** (MIT; renamed from `pdf-totals` on 2026-10-15; pushing to the old URL still works through GitHub's redirect). On 2026-10-15 unauthenticated raw.githubusercontent.com URLs returned 404, so the repository was probably made private. The user's VM downloads the scripts with unauthenticated `curl.exe`, so this only works while the repo is public. Check before giving them a command. Local clone used so far:
   `/home/claude/pdf-totals`.
 - Files:
   - `lotes_auto.py`: main program, about 2,400 lines, Spanish identifiers and messages.

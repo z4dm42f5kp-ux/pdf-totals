@@ -24,10 +24,13 @@ PDFs escaneados dudosos se leen otra vez con mas resolucion, y un PDF solo se ma
 como MALO cuando la prueba es concluyente.
 """
 import argparse
+import hashlib
+import json
 import os
 import pathlib
 import re
 import sys
+import time
 import unicodedata
 from collections import Counter, defaultdict, namedtuple
 from dataclasses import dataclass, field
@@ -36,7 +39,7 @@ import pdfplumber
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 # ============================== CONFIGURACION ===============================
 # Total esperado de la tabla "Cantidad total para destruccion" (None = sin comprobar).
@@ -81,6 +84,28 @@ OCR_DPI_REINTENTO = 400
 CONFIANZA_MINIMA = 0.90
 # Formularios "de lado" (un producto por columna): renglon de cantidad preferido.
 PRIORIDAD_RENGLON = ["devuel", "recibid", "retir", "recuper", "pieza", "cantidad", "factur"]
+
+# ------------------------------- velocidad ----------------------------------
+# Procesos que leen paginas a la vez. 0 = automatico (segun nucleos y memoria libre);
+# 1 = uno solo, sin procesos paralelos. Tambien con --procesos N.
+PROCESOS = 0
+# Lado mayor maximo, en pixeles, de la imagen de una pagina. El OCR reduce de todos modos
+# cada imagen a 2000 px; el limite solo evita imagenes gigantes (p. ej. escaneos guardados
+# a 72 ppp, cuya pagina mide un metro) que antes podian tardar minutos o agotar la memoria.
+LADO_MAX_PX = 6000
+# Lectura 3: lado mayor maximo antes de ampliar al doble.
+LADO_MAX_PX_AMPLIADA = 4400
+# Lo que el OCR lee de cada pagina se guarda en resultados_lotes/cache, identificado por
+# el contenido del PDF: la siguiente corrida no vuelve a leer las paginas que no cambiaron.
+# Se desactiva con --sin-cache.
+USAR_CACHE = True
+# Cambiar este valor invalida la cache (si se cambia el OCR, la resolucion o el procesado).
+CACHE_VERSION = "1"
+# Aviso en pantalla cuando una pagina lleva mas de estos segundos.
+AVISO_LENTO_S = 45
+# Una pagina que tarda mas que esto (atascada) se deja sin leer: el PDF va a
+# revisar_a_mano.txt con el motivo y el programa sigue con las demas paginas.
+LIMITE_PAGINA_S = 600
 
 # Significado de los encabezados de columna (texto sin acentos y en minusculas).
 SEMANTICA = {
@@ -248,6 +273,8 @@ class Lectura:
     avisos: list = field(default_factory=list)
     paginas: int = 0
     conf_media: float = 1.0
+    pag_info: list = field(default_factory=list)   # por pagina: (fuente, renglones, relevante, conf)
+    releidas: tuple = ()                            # paginas leidas con esta lectura (las demas: lectura 1)
 
 
 class OCRNoDisponible(Exception):
@@ -258,13 +285,16 @@ class OCRNoDisponible(Exception):
 _ocr = None
 
 
+_hilos_ocr = None                       # hilos por proceso (None = los que elija onnxruntime)
+
+
 def load_ocr():
     """rapidocr_onnxruntime (Python <= 3.12) o rapidocr 3.x + onnxruntime. Devuelve
     una funcion imagen -> [(caja, texto, confianza)]."""
     errores = []
     try:
         from rapidocr_onnxruntime import RapidOCR
-        motor = RapidOCR()
+        motor = RapidOCR(intra_op_num_threads=_hilos_ocr) if _hilos_ocr else RapidOCR()
         return lambda arr: (motor(arr)[0] or [])
     except Exception as e:              # ImportError, o "DLL load failed" en Windows
         errores.append(f"rapidocr_onnxruntime: {e}")
@@ -272,7 +302,8 @@ def load_ocr():
         import logging
         from rapidocr import RapidOCR
         logging.getLogger("RapidOCR").setLevel(logging.WARNING)
-        motor = RapidOCR()
+        motor = (RapidOCR(params={"EngineConfig.onnxruntime.intra_op_num_threads": _hilos_ocr})
+                 if _hilos_ocr else RapidOCR())
 
         def leer(arr):
             r = motor(arr)
@@ -300,9 +331,21 @@ def preprocesar(img, pasada):
     return gris.filter(ImageFilter.UnsharpMask(radius=2, percent=160, threshold=3)).convert("RGB")
 
 
+def es_pagina_de_texto(page):
+    return len(page.chars) >= 20 or bool(page.chars and not page.images)
+
+
+def renderizar(page, dpi, lado_max=LADO_MAX_PX):
+    """Imagen de la pagina a la resolucion pedida, sin pasar de lado_max pixeles."""
+    lado = max(float(page.width), float(page.height)) * dpi / 72.0
+    if lado > lado_max:
+        dpi = dpi * lado_max / lado
+    return page.to_image(resolution=dpi).original
+
+
 def page_tokens(page, pasada=1):
     """Palabras de la pagina con posicion y confianza; fuente 'texto' u 'OCR'."""
-    if len(page.chars) >= 20 or (page.chars and not page.images):
+    if es_pagina_de_texto(page):
         words = page.extract_words(x_tolerance=1.5, y_tolerance=2)
         return [Tok(w["x0"], w["x1"], (w["top"] + w["bottom"]) / 2, w["bottom"] - w["top"],
                     w["text"], 1.0, i) for i, w in enumerate(words)], "texto"
@@ -311,7 +354,10 @@ def page_tokens(page, pasada=1):
         _ocr = load_ocr()
     import numpy as np
     try:
-        img = page.to_image(resolution=OCR_DPI_REINTENTO if pasada == 2 else OCR_DPI).original
+        if pasada == 3:
+            img = renderizar(page, OCR_DPI, LADO_MAX_PX_AMPLIADA)
+        else:
+            img = renderizar(page, OCR_DPI_REINTENTO if pasada == 2 else OCR_DPI)
     except ImportError as e:            # sin pypdfium2 (p. ej. BSD) no se puede rasterizar
         raise OCRNoDisponible(str(e)) from e
     img = img.convert("RGB")
@@ -616,18 +662,22 @@ def es_secuencia(vals):
 def relaciones_suma(M, cand):
     """Ternas (a, b, s) con v[a] + v[b] == v[s] en todos los renglones (o en >= 80%)."""
     res = []
-    n = len(M)
+    col = {k: [fila[k] for fila in M] for k in cand}
+    trivial = {k: all(v in (0, None) for v in col[k]) for k in cand}
+    pares = [(a, b) for a in cand for b in cand if a < b and not trivial[a] and not trivial[b]]
     for s in cand:
-        for a in cand:
-            for b in cand:
-                if len({a, b, s}) < 3 or a > b:
-                    continue
-                ok = sum(1 for fila in M if None not in (fila[a], fila[b], fila[s])
-                         and fila[a] + fila[b] == fila[s])
-                completos = sum(1 for fila in M if None not in (fila[a], fila[b], fila[s]))
-                trivial = all(fila[a] in (0, None) for fila in M) or all(fila[b] in (0, None) for fila in M)
-                if completos >= 2 and not trivial and ok >= max(2, completos - (completos // 5)):
-                    res.append((a, b, s))
+        vs = col[s]
+        for a, b in pares:
+            if s == a or s == b:
+                continue
+            ok = completos = 0
+            for x, y, z in zip(col[a], col[b], vs):
+                if x is not None and y is not None and z is not None:
+                    completos += 1
+                    if x + y == z:
+                        ok += 1
+            if completos >= 2 and ok >= max(2, completos - (completos // 5)):
+                res.append((a, b, s))
     return res
 
 
@@ -993,22 +1043,40 @@ def deduplicar_en_archivo(entradas, avisos, traza):
                       f"({', '.join(f'p{p}: {fmt(sumas[p])}' for p in orden)}); se suman")
 
 
+RELEVANTE_RE = re.compile(r"\d{6,}|l[o0]te|pieza|pzas|cantidad|devol|retir", re.I)
+
+
 def leer_pdf(ruta, nombre, pasada=1, traza=None):
+    """Lee y analiza un PDF completo en este proceso (sin cache). lotes_auto.py usa
+    LectorPaginas (paralelo y con cache) y analizar_documento; diagnostico.py usa esto."""
+    with pdfplumber.open(ruta) as doc:
+        paginas = [page_tokens(page, pasada) for page in doc.pages]
+    return analizar_documento(nombre, paginas, pasada, traza)
+
+
+def analizar_documento(nombre, paginas, pasada=1, traza=None, releidas=()):
+    """paginas: [(tokens, fuente)] en orden. Devuelve la Lectura del PDF."""
     traza = [] if traza is None else traza
     entradas, refs, lineas, fuentes, tipos, avisos, confs = [], [], [], set(), [], [], []
-    with pdfplumber.open(ruta) as doc:
-        npag = len(doc.pages)
-        for pnum, page in enumerate(doc.pages, 1):
-            toks, fuente = page_tokens(page, pasada)
-            fuentes.add(fuente)
-            confs += [t.conf for t in toks]
-            renglones = agrupar_renglones(toks)
-            lineas += [r.texto for r in renglones]
-            traza.append(f"pagina {pnum}: {len(renglones)} renglones ({fuente})")
-            e, r, tipo_pag = analizar_pagina(renglones, pnum, traza)
-            tipos.append(tipo_pag)
-            entradas += e
-            refs += r
+    npag = len(paginas)
+    info = []
+    if releidas:
+        traza.append(f"lectura {pasada} de las paginas {', '.join(map(str, releidas))}"
+                     + ("; las demas, de la lectura 1" if len(releidas) < npag else ""))
+    for pnum, (toks, fuente) in enumerate(paginas, 1):
+        fuentes.add(fuente)
+        confs += [t.conf for t in toks]
+        renglones = agrupar_renglones(toks)
+        textos = [r.texto for r in renglones]
+        lineas += textos
+        traza.append(f"pagina {pnum}: {len(renglones)} renglones ({fuente})")
+        e, r, tipo_pag = analizar_pagina(renglones, pnum, traza)
+        tipos.append(tipo_pag)
+        entradas += e
+        refs += r
+        cp = [t.conf for t in toks]
+        info.append((fuente, len(renglones), bool(RELEVANTE_RE.search(" ".join(textos))),
+                     sum(cp) / len(cp) if cp else 0.0))
     # paginas sin tipo reconocido: tipo mayoritario del archivo
     conocido = Counter(t for t in tipos if t)
     tipo_archivo = conocido.most_common(1)[0][0] if conocido else None
@@ -1023,7 +1091,36 @@ def leer_pdf(ruta, nombre, pasada=1, traza=None):
     deduplicar_en_archivo(entradas, avisos, traza)
     fuente = "mixto" if len(fuentes) > 1 else (fuentes.pop() if fuentes else "")
     return Lectura(nombre, entradas, refs, lineas, fuente, traza, pasada, avisos=avisos, paginas=npag,
-                   conf_media=sum(confs) / len(confs) if confs else 0.0)
+                   conf_media=sum(confs) / len(confs) if confs else 0.0, pag_info=info,
+                   releidas=tuple(releidas))
+
+
+def paginas_dudosas(L, problema_lotes):
+    """Paginas escaneadas de un PDF dudoso que vale la pena leer otra vez: las que tienen
+    cantidades sin verificar, con fallas, de lotes que no cuadran o con lotes fuera del
+    Excel, filas de reporte que no cuadran, y las que no dieron cantidades pero tienen
+    texto de lotes o piezas, se leyeron con poca confianza o casi vacias. Si el PDF no
+    dio nada, todas sus paginas escaneadas. Las paginas cuyas cantidades estan todas
+    verificadas no se vuelven a leer: otra lectura no puede mejorarlas."""
+    ocr = [p for p, (fuente, *_ ) in enumerate(L.pag_info, 1) if fuente == "OCR"]
+    activas = [e for e in L.entradas if not e.excluido]
+    if not activas and not L.referencias:
+        return ocr
+    sel = set()
+    con_datos = {e.pagina for e in L.entradas} | {r.pagina for r in L.referencias}
+    for e in L.entradas:
+        if (e.excluido == FUERA_EXCEL or e.lote in problema_lotes or e.fallas
+                or (not e.excluido and not e.verificado)
+                or (not e.excluido and e.conf < CONFIANZA_MINIMA and not e.verificado)):
+            sel.add(e.pagina)
+    sel |= {r.pagina for r in L.referencias if not r.cuadra}
+    for p in ocr:
+        if p in con_datos:
+            continue
+        _, nren, relevante, conf = L.pag_info[p - 1]
+        if relevante or conf < CONFIANZA_MINIMA or nren < 5:
+            sel.add(p)
+    return sorted(p for p in sel if p in ocr)
 
 
 def calidad(L):
@@ -1392,6 +1489,299 @@ def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correc
         malos.setdefault(c.archivo, []).append(
             f"lote {c.lote}: {fmt(c.piezas)} piezas repetidas de {orig.archivo}; sin esta copia el total "
             f"coincide exactamente con el esperado ({fmt(total_esperado)})")
+
+
+# ------------------------- lectura en paralelo y cache -----------------------
+def huella_pdf(ruta):
+    """Identifica el contenido del PDF (no su nombre): renombrar un PDF no invalida la
+    cache, y cambiar su contenido si."""
+    h = hashlib.sha1()
+    with open(ruta, "rb") as f:
+        for bloque in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloque)
+    h.update(f"|{CACHE_VERSION}|{OCR_DPI}|{OCR_DPI_REINTENTO}|{LADO_MAX_PX}|{LADO_MAX_PX_AMPLIADA}".encode())
+    return h.hexdigest()[:24]
+
+
+def memoria_libre_gb():
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class Estado(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong)] + [
+                    (n, ctypes.c_ulonglong) for n in ("total", "libre", "tpag", "lpag", "tvir", "lvir", "ext")]
+            e = Estado()
+            e.dwLength = ctypes.sizeof(Estado)
+            return e.libre / 2 ** 30 if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(e)) else None
+        with open("/proc/meminfo") as f:
+            for linea in f:
+                if linea.startswith("MemAvailable:"):
+                    return int(linea.split()[1]) / 2 ** 20
+    except Exception:
+        pass
+    try:
+        return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2 ** 30
+    except Exception:
+        return None
+
+
+def procesos_automaticos():
+    """Un proceso por nucleo (maximo 8), sin pasar de unos 1.2 GB de memoria libre por
+    proceso (cada uno carga su propio OCR)."""
+    n = min(os.cpu_count() or 1, 8)
+    mem = memoria_libre_gb()
+    if mem is not None:
+        n = min(n, max(1, int(mem / 1.2)))
+    return max(1, n)
+
+
+_doc_abierto = None                     # (ruta, documento pdfplumber) de este proceso
+
+
+def _iniciar_proceso(hilos):
+    global _hilos_ocr
+    _hilos_ocr = hilos
+    os.environ["OMP_NUM_THREADS"] = str(hilos)
+    try:
+        import cv2
+        cv2.setNumThreads(hilos)
+    except Exception:
+        pass
+
+
+def _cerrar_doc():
+    global _doc_abierto
+    if _doc_abierto is not None:
+        try:
+            _doc_abierto[1].close()
+        except Exception:
+            pass
+        _doc_abierto = None
+
+
+def _leer_pagina(ruta, pnum, pasada):
+    """Trabajo de un proceso: palabras de una pagina. Devuelve (tokens, fuente, segundos)."""
+    global _doc_abierto
+    t0 = time.perf_counter()
+    if _doc_abierto is None or _doc_abierto[0] != str(ruta):
+        _cerrar_doc()
+        _doc_abierto = (str(ruta), pdfplumber.open(ruta))
+    page = _doc_abierto[1].pages[pnum - 1]
+    try:
+        toks, fuente = page_tokens(page, pasada)
+    finally:
+        if hasattr(page, "close"):
+            page.close()                # libera la memoria de la pagina
+    return [tuple(t) for t in toks], fuente, time.perf_counter() - t0
+
+
+class LectorPaginas:
+    """Lee paginas en varios procesos a la vez y guarda lo leido en una cache en disco.
+
+    trabajos: [(nombre, ruta, huella, pagina, lectura)]. Devuelve
+    {(nombre, pagina, lectura): (tokens, fuente) o la excepcion de esa pagina}."""
+
+    def __init__(self, carpeta_cache, procesos):
+        self.cache = carpeta_cache
+        if self.cache is not None:
+            self.cache.mkdir(parents=True, exist_ok=True)
+        self.procesos = procesos or procesos_automaticos()
+        self.hilos = max(1, (os.cpu_count() or 1) // self.procesos)
+        self.pool = None
+        self.npags = {}
+        self.de_cache = 0
+        self.leidas = 0
+        self.segundos = 0.0
+
+    # ---- cache ----
+    def _archivo(self, huella, pnum, pasada):
+        return self.cache / f"{huella}_p{pnum:04d}_l{pasada}.json"
+
+    def _de_cache(self, huella, pnum, pasada):
+        if self.cache is None:
+            return None
+        for k in (0, pasada):           # 0: pagina con texto (igual en todas las lecturas)
+            f = self._archivo(huella, pnum, k)
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                return [Tok(*t) for t in d["toks"]], d["fuente"]
+            except FileNotFoundError:
+                continue
+            except Exception:           # archivo de cache danado: se vuelve a leer
+                continue
+        return None
+
+    def _guardar(self, huella, pnum, pasada, toks, fuente):
+        if self.cache is None:
+            return
+        f = self._archivo(huella, pnum, 0 if fuente == "texto" else pasada)
+        tmp = f.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps({"fuente": fuente, "toks": [list(t) for t in toks]},
+                                      ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, f)
+        except OSError:
+            pass
+
+    def limpiar(self, huellas_vigentes):
+        """Borra de la cache los PDFs que ya no estan o que cambiaron."""
+        if self.cache is None:
+            return
+        for f in self.cache.glob("*"):
+            if f.name.split("_")[0] not in huellas_vigentes:
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+
+    # ---- lectura ----
+    def _pool(self):
+        if self.pool is None:
+            import multiprocessing
+            from concurrent.futures import ProcessPoolExecutor
+            # "spawn" en todos los sistemas (es lo unico que hay en Windows): un proceso nuevo
+            # no hereda los hilos del OCR del proceso principal, que con "fork" se bloquean.
+            self.pool = ProcessPoolExecutor(max_workers=self.procesos, initializer=_iniciar_proceso,
+                                            initargs=(self.hilos,),
+                                            mp_context=multiprocessing.get_context("spawn"))
+        return self.pool
+
+    def cerrar(self, rapido=False):
+        if self.pool is not None:
+            if rapido:
+                self.pool.shutdown(wait=False, cancel_futures=True)
+            else:
+                self.pool.shutdown(wait=True)
+            self.pool = None
+        _cerrar_doc()
+
+    def leer(self, trabajos, al_terminar=None, res=None):
+        res = {} if res is None else res
+        pendientes = defaultdict(int)       # nombre -> paginas que faltan
+        segundos = defaultdict(float)
+        leidas = defaultdict(int)           # nombre -> paginas leidas (no de la cache)
+        for nombre, *_ in trabajos:
+            pendientes[nombre] += 1
+        faltan = []
+
+        def listo(t, valor, seg, de_cache=False):
+            nombre, _, huella, pnum, pasada = t
+            res[(nombre, pnum, pasada)] = valor
+            segundos[nombre] += seg
+            leidas[nombre] += not de_cache
+            pendientes[nombre] -= 1
+            if pendientes[nombre] == 0 and al_terminar:
+                al_terminar(nombre, segundos[nombre] if leidas[nombre] else None)
+
+        for t in trabajos:
+            hit = self._de_cache(t[2], t[3], t[4])
+            if hit is not None:
+                self.de_cache += 1
+                listo(t, hit, 0.0, True)
+            else:
+                faltan.append(t)
+        if not faltan:
+            return res
+        if self.procesos > 1 and len(faltan) > 1:
+            faltan = self._en_paralelo(faltan, listo)
+            if faltan:
+                print(f"   (los procesos paralelos fallaron; se leen {len(faltan)} pagina(s) una por una)")
+                self.procesos = 1           # el resto de la corrida, en un solo proceso
+        for t in faltan:                    # un solo proceso
+            nombre, ruta, huella, pnum, pasada = t
+            try:
+                toks, fuente, seg = _leer_pagina(ruta, pnum, pasada)
+            except Exception as e:
+                listo(t, e, 0.0)
+                continue
+            toks = [Tok(*x) for x in toks]
+            self._guardar(huella, pnum, pasada, toks, fuente)
+            self.leidas += 1
+            self.segundos += seg
+            listo(t, (toks, fuente), seg)
+        _cerrar_doc()
+        return res
+
+    def _matar_pool(self):
+        """Termina los procesos (p. ej. uno atascado) sin esperar a que acaben."""
+        if self.pool is None:
+            return
+        for p in list(getattr(self.pool, "_processes", {}).values()):
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        try:
+            self.pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
+        self.pool = None
+
+    def _en_paralelo(self, faltan, listo):
+        """Devuelve los trabajos que quedan sin hacer si los procesos fallan."""
+        from concurrent.futures import FIRST_COMPLETED, wait
+        from concurrent.futures.process import BrokenProcessPool
+        cola = list(faltan)
+        while cola:
+            try:
+                pool = self._pool()
+                futuros = {pool.submit(_leer_pagina, t[1], t[3], t[4]): t for t in cola}
+            except Exception:
+                self._matar_pool()
+                return cola
+            cola = []
+            hechos, inicio, avisado = set(), {}, {}
+            pendientes = set(futuros)
+            roto = atasco = False
+            while pendientes:
+                terminados, pendientes = wait(pendientes, timeout=5, return_when=FIRST_COMPLETED)
+                ahora = time.monotonic()
+                for fu in terminados:
+                    t = futuros[fu]
+                    try:
+                        toks, fuente, seg = fu.result()
+                    except BrokenProcessPool:
+                        roto = True
+                        continue
+                    except Exception as e:
+                        hechos.add(fu)
+                        listo(t, e, 0.0)
+                        continue
+                    toks = [Tok(*x) for x in toks]
+                    self._guardar(t[2], t[3], t[4], toks, fuente)
+                    self.leidas += 1
+                    self.segundos += seg
+                    hechos.add(fu)
+                    listo(t, (toks, fuente), seg)
+                if roto:
+                    break
+                for fu in pendientes:           # paginas lentas: aviso y, si se atascan, se dejan
+                    if not fu.running():
+                        continue
+                    inicio.setdefault(fu, ahora)
+                    dur = ahora - inicio[fu]
+                    nombre, _, _, pnum, pasada = futuros[fu]
+                    donde = (f"{nombre}, pagina {pnum} de {self.npags.get(nombre, '?')}"
+                             f"{'' if pasada == 1 else f' (lectura {pasada})'}")
+                    if dur >= LIMITE_PAGINA_S:
+                        print(f"   *** {donde}: mas de {LIMITE_PAGINA_S} s; se deja sin leer y sigue con lo demas")
+                        hechos.add(fu)
+                        listo(futuros[fu], TimeoutError(f"la pagina {pnum} tardo mas de {LIMITE_PAGINA_S} s "
+                                                        f"y no se leyo"), dur)
+                        atasco = True
+                    elif dur >= AVISO_LENTO_S * (avisado.get(fu, 0) + 1):
+                        avisado[fu] = avisado.get(fu, 0) + 1
+                        print(f"   ... sigue leyendo {donde}: {int(dur)} s")
+                if atasco:
+                    break
+            if roto:
+                self._matar_pool()
+                return [t for fu, t in futuros.items() if fu not in hechos]
+            if atasco:                          # procesos nuevos para el resto
+                self._matar_pool()
+                cola = [t for fu, t in futuros.items() if fu not in hechos]
+        return []
 
 
 # ------------------------------- salidas -----------------------------------
@@ -1827,7 +2217,7 @@ def exportar_paginas(carpeta, rutas, pedidos, dpi=110):
                     continue
                 base = re.sub(r"[^\w\- ]", "_", pathlib.Path(f).stem)
                 nombre = f"{n:03d}_{base}_p{pag}.png"
-                doc.pages[pag - 1].to_image(resolution=dpi).original.save(carpeta / nombre)
+                renderizar(doc.pages[pag - 1], dpi, 2200).save(carpeta / nombre)
                 hechas[(f, pag)] = f"{carpeta.name}/{nombre}"
             except ImportError:
                 return hechas               # sin pypdfium2 no se pueden crear imagenes
@@ -1874,8 +2264,13 @@ def main(argv=None):
                     help=f"total esperado no distribuido (por omision: {TOTAL_NO_DISTRIBUIDA_ESPERADO}; 0 = no comprobar)")
     ap.add_argument("--excel", metavar="RUTA", default=EXCEL_REFERENCIA,
                     help="Excel de referencia (por omision se busca en la carpeta y subcarpetas)")
+    ap.add_argument("--procesos", type=int, default=None, metavar="N",
+                    help="procesos que leen paginas a la vez (por omision: automatico; 1 = uno solo)")
+    ap.add_argument("--sin-cache", action="store_true",
+                    help="volver a leer todas las paginas aunque esten en resultados_lotes/cache")
     ap.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     args = ap.parse_args(argv)
+    inicio = time.monotonic()
     esperado = args.total_esperado or None
     global ESPERADOS
     ESPERADOS = {"ret": args.retirado_esperado or None, "nod": args.no_distribuida_esperada or None,
@@ -1918,37 +2313,89 @@ def main(argv=None):
     info_omitidos = {}
 
     lecturas, rutas, omitidos, sin_resultado, log = {}, {}, [], [], []
-    aviso_ocr = False
-    for n, pdf in enumerate(pdfs, 1):
-        name = str(pdf.relative_to(folder))
-        print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
-        if OMITIR_NOMBRE.search(pdf.name):
-            omitidos.append(name)
-            print("  -> omitido (FALTA REVISION; se lee solo para informar)")
-            try:
-                info_omitidos[name] = leer_pdf(pdf, name)
-            except Exception:
-                pass
-            continue
+    procesos = PROCESOS if args.procesos is None else max(1, args.procesos)
+    usar_cache = USAR_CACHE and not args.sin_cache
+    lector = LectorPaginas(salida / "cache" if usar_cache else None, procesos)
+    nombres = {str(p.relative_to(folder)): p for p in pdfs}
+    huellas, npags, resultado = {}, {}, {}
+    trabajos = []
+    for name, pdf in nombres.items():
         try:
-            L = leer_pdf(pdf, name)
-        except OCRNoDisponible as e:
-            print("  -> escaneado, OCR no disponible")
-            sin_resultado.append((name, "escaneado; OCR no disponible en este sistema"))
-            log += ["=" * 70, name, "Motivo: escaneado; OCR no disponible", f"Detalle: {e}", ""]
-            if not aviso_ocr:
-                print("     Para leer PDFs escaneados instala el OCR:  " + ocr_install_hint())
-                aviso_ocr = True
-            continue
+            huellas[name] = huella_pdf(pdf)
+            with pdfplumber.open(pdf) as doc:
+                npags[name] = len(doc.pages)
         except Exception as e:
-            print(f"  -> ERROR: {e}")
-            sin_resultado.append((name, f"error al leer: {e}"))
-            log += ["=" * 70, name, f"Motivo: error al leer: {e}", ""]
+            resultado[name] = ("error", e)
+            print(f"{name}  -> " + ("omitido (FALTA REVISION)" if OMITIR_NOMBRE.search(pdf.name)
+                                    else f"ERROR: {e}"))
             continue
-        lecturas[name], rutas[name] = L, pdf
-        print(f"  -> {resumen_archivo(L)}")
+        trabajos += [(name, pdf, huellas[name], p, 1) for p in range(1, npags[name] + 1)]
+    lector.npags = npags
+    print(f"{len(trabajos)} paginas; {lector.procesos} proceso(s) a la vez"
+          + ("" if usar_cache else "; sin cache"))
+    hechos = [0]
+    aviso_ocr = [False]
+    paginas_1 = {}
 
-    # ----- comprobaciones y segunda lectura -----
+    def terminar(name, seg, pasada=1):
+        hechos[0] += 1
+        pdf = nombres[name]
+        pre = f"[{hechos[0]}/{len(pdfs)}] {name}"
+        paginas = [paginas_1[(name, p, 1)] for p in range(1, npags[name] + 1)]
+        err = next((x for x in paginas if isinstance(x, Exception)), None)
+        dur = f"  [{npags[name]} pag, " + ("cache]" if seg is None else f"{seg:.1f} s]")
+        if OMITIR_NOMBRE.search(pdf.name):
+            print(pre + "  -> omitido (FALTA REVISION; se lee solo para informar)" + dur)
+            L = None
+            if err is None:
+                try:
+                    L = analizar_documento(name, paginas, 1)
+                except Exception:
+                    pass
+            resultado[name] = ("omitido", L)
+            return
+        if isinstance(err, OCRNoDisponible):
+            print(pre + "  -> escaneado, OCR no disponible")
+            if not aviso_ocr[0]:
+                print("     Para leer PDFs escaneados instala el OCR:  " + ocr_install_hint())
+                aviso_ocr[0] = True
+            resultado[name] = ("sin_ocr", err)
+            return
+        try:
+            if err is not None:
+                raise err
+            L = analizar_documento(name, paginas, 1)
+        except Exception as e:
+            print(f"{pre}  -> ERROR: {e}")
+            resultado[name] = ("error", e)
+            return
+        resultado[name] = ("ok", L)
+        print(f"{pre}  -> {resumen_archivo(L)}{dur}")
+
+    for name in [n for n in nombres if npags.get(n) == 0]:
+        terminar(name, 0.0)
+    try:
+        lector.leer(trabajos, terminar, paginas_1)
+    except BaseException:
+        lector.cerrar(rapido=True)
+        raise
+    # mismo orden que antes (orden de los nombres), sin importar que PDF termino primero
+    for name in nombres:
+        tipo, x = resultado[name]
+        if tipo == "omitido" or (tipo == "error" and OMITIR_NOMBRE.search(nombres[name].name)):
+            omitidos.append(name)
+            if tipo == "omitido" and x is not None:
+                info_omitidos[name] = x
+        elif tipo == "sin_ocr":
+            sin_resultado.append((name, "escaneado; OCR no disponible en este sistema"))
+            log += ["=" * 70, name, "Motivo: escaneado; OCR no disponible", f"Detalle: {x}", ""]
+        elif tipo == "error":
+            sin_resultado.append((name, f"error al leer: {x}"))
+            log += ["=" * 70, name, f"Motivo: error al leer: {x}", ""]
+        else:
+            lecturas[name], rutas[name] = x, nombres[name]
+
+    # ----- comprobaciones y nuevas lecturas de las paginas dudosas -----
     res = conciliar(lecturas)
     alternativas = {}
     problema_lotes = {l for _, _, l, _, _ in res.problemas}
@@ -1958,20 +2405,55 @@ def main(argv=None):
         dudosa(L) or any(e.lote in problema_lotes for e in L.entradas)
         or (hay_que_reintentar and any(not e.verificado for e in L.entradas)))]
     if dudosas and (hay_que_reintentar or any(dudosa(lecturas[f]) for f in dudosas)):
-        print(f"\nNuevas lecturas de {len(dudosas)} PDF(s) dudoso(s): {OCR_DPI_REINTENTO} ppp con mas contraste, "
-              "y ampliada al doble y enfocada...")
-        for n, f in enumerate(dudosas, 1):
-            print(f"   [{n}/{len(dudosas)}] {f}", end="", flush=True)
+        objetivo = {f: paginas_dudosas(lecturas[f], problema_lotes) for f in dudosas}
+        trabajos = [(f, rutas[f], huellas[f], p, k) for f in dudosas for k in (2, 3) for p in objetivo[f]]
+        print(f"\nNuevas lecturas de {len(trabajos) // 2} pagina(s) dudosa(s) de {len(dudosas)} PDF(s): "
+              f"{OCR_DPI_REINTENTO} ppp con mas contraste, y ampliada al doble y enfocada...")
+        paginas_r, elegidas = {}, {}
+        hechos[0] = 0
+
+        def terminar_r(f, seg):
+            hechos[0] += 1
+            pags = objetivo[f]
             lecturas_f = [lecturas[f]]
-            for pasada in (2, 3):
+            errores = []
+            for pasada in (2, 3) if pags else ():
+                mezcla = [paginas_r[(f, p, pasada)] if p in pags else paginas_1[(f, p, 1)]
+                          for p in range(1, npags[f] + 1)]
+                err = next((x for x in mezcla if isinstance(x, Exception)), None)
                 try:
-                    lecturas_f.append(leer_pdf(rutas[f], f, pasada=pasada))
+                    if err is not None:
+                        raise err
+                    lecturas_f.append(analizar_documento(f, mezcla, pasada, releidas=pags))
                 except Exception as e:
-                    print(f"  (lectura {pasada}: {e})", end="")
+                    errores.append(f"  (lectura {pasada}: {e})")
             mejor = max(lecturas_f, key=calidad)
-            alternativas[f] = [x for x in lecturas_f if x is not mejor]
+            elegidas[f] = (mejor, [x for x in lecturas_f if x is not mejor])
+            if not pags:
+                cuales = "ninguna pagina escaneada que releer"
+            elif len(pags) < npags[f]:
+                cuales = f"pagina{'s' if len(pags) > 1 else ''} {', '.join(map(str, pags))} de {npags[f]}"
+            else:
+                cuales = f"{npags[f]} pag"
+            cuando = "" if not pags else ", cache" if seg is None else f", {seg:.1f} s"
+            print(f"   [{hechos[0]}/{len(dudosas)}] {f} ({cuales}{cuando})"
+                  f"{''.join(errores)}  -> se usa la lectura {mejor.pasada}: {resumen_archivo(mejor)}")
+
+        for f in dudosas:
+            if not objetivo[f]:
+                terminar_r(f, 0.0)
+        try:
+            lector.leer(trabajos, terminar_r, paginas_r)
+        except BaseException:
+            lector.cerrar(rapido=True)
+            raise
+        for f in dudosas:                   # mismo orden que antes
+            mejor, otras = elegidas[f]
+            alternativas[f] = otras
             lecturas[f] = mejor
-            print(f"  -> se usa la lectura {mejor.pasada}: {resumen_archivo(mejor)}")
+    lector.cerrar()
+    if usar_cache:
+        lector.limpiar(set(huellas.values()))
     malos, correcciones = {}, []
     res = conciliar(lecturas)
     if res.problemas or (medir is not None and medir[0](res) != medir[1]):
@@ -2053,6 +2535,8 @@ def main(argv=None):
         print(f"Imagenes de {len(imagenes)} pagina(s) a revisar: {salida / 'paginas'}")
     print(f"Todos los resultados estan en: {salida}")
     print(f"Excel: {out}")
+    print(f"Tiempo: {time.monotonic() - inicio:.0f} s ({lector.leidas} pagina(s) leidas, "
+          f"{lector.de_cache} de la cache, {lector.procesos} proceso(s))")
     return 0
 
 

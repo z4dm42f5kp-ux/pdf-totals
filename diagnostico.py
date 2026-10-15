@@ -13,6 +13,7 @@ RUTA puede ser un PDF o una carpeta (se revisan todos los PDFs, con subcarpetas)
 import argparse
 import pathlib
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import lotes_auto as la  # noqa: E402
@@ -23,6 +24,7 @@ def diagnose(pdf, max_lines, pasada):
     print(f"ARCHIVO: {pdf}")
     if la.OMITIR_NOMBRE.search(pdf.name):
         print("Nota: el nombre contiene 'FALTA REVISION'; lotes_auto.py lo omite.")
+    t0 = time.monotonic()
     try:
         L = la.leer_pdf(pdf, pdf.name, pasada=pasada)
     except la.OCRNoDisponible as e:
@@ -34,7 +36,8 @@ def diagnose(pdf, max_lines, pasada):
         print(f"Resultado: error al leer el PDF: {e}")
         return
 
-    print(f"Fuente del texto: {L.fuente}   (lectura {pasada})")
+    print(f"Fuente del texto: {L.fuente}   (lectura {pasada}; {L.paginas} pagina(s) en "
+          f"{time.monotonic() - t0:.1f} s)")
     print("-" * 70)
     shown = L.lineas[:max_lines]
     print(f"TEXTO LEIDO ({len(shown)} de {len(L.lineas)} renglones):")

@@ -66,6 +66,9 @@ The program also searches all subfolders. It skips every file whose name contain
 - detalle_lotes.txt lists every quantity of each batch, the PDF that contains it and whether it is verified.
 - revisar_a_mano.txt lists the PDFs that are marked as bad, the corrections, the batches that do not match, the suspicious PDFs and the PDFs from which no quantity could be read.
 - sin_resultado.log contains the text that was read from each PDF that produced no quantity.
+- the folder cache contains what was read from each page. The next run uses it, so it takes seconds instead of minutes.
+
+The program reads several pages at the same time, one for each processor core. The option `--procesos 1` reads one page after the other. The option `--sin-cache` reads every page again.
 
 To see what the program reads and detects in one PDF, run diagnostico.py with the path of the PDF. diagnostico.py does not write any files.
 

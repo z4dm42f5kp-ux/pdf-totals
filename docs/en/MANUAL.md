@@ -9,7 +9,7 @@ diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF do
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] FOLDER
+python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] FOLDER
 python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
 ```
 
@@ -73,7 +73,7 @@ Two pages of the same PDF that contain exactly the same batch numbers are treate
 
 A batch that appears on several other pages of the same PDF is counted once when the quantity is the same. A page whose quantity is the sum of the other pages is not counted. If the same batch appears on several pages with different quantities, the quantities are added, and the PDF is listed for review. Several rows of the same batch on the same page are always added, because they are separate lines of the document, for example different invoices.
 
-If a batch exceeds its limit, does not match the withdrawal report, or the total does not match the expected total, the program reads the doubtful scanned PDFs two more times. The second reading uses a higher resolution and more contrast. The third reading enlarges the image to twice its size and sharpens it, which helps with small or blurred text. The program keeps the reading with the most verified quantities, and keeps the other readings for the next step. Then it tries to explain each difference exactly and without ambiguity:
+If a batch exceeds its limit, does not match the withdrawal report, or the total does not match the expected total, the program reads the doubtful pages of the doubtful scanned PDFs two more times. A doubtful page is a scanned page with a quantity that is not verified, that has a failed check, that belongs to a batch that does not match, or whose batch number is not in the Excel file; a page of a withdrawal report whose row does not match; and a page without quantities that mentions batches or pieces, that was read with a low confidence, or from which almost nothing was read. Pages whose quantities are all verified are not read again, because another reading cannot improve them. If a PDF produced no quantity at all, all its scanned pages are read again. The second reading uses a higher resolution and more contrast. The third reading enlarges the image to twice its size and sharpens it, which helps with small or blurred text. The program keeps the reading with the most verified quantities, and keeps the other readings for the next step. Then it tries to explain each difference exactly and without ambiguity:
 
 - If the other reading of exactly one PDF makes the batch match, that reading is used.
 - If a row in one PDF is an exact copy of a row in another PDF, and the batch matches when the copy is removed, the copy is not counted.
@@ -100,6 +100,8 @@ Options of lotes_auto.py:
 - `--retirado-esperado N` sets the expected total of withdrawn pieces. The default value is `209,908`. The value 0 switches the check off.
 - `--no-distribuida-esperada N` sets the expected total of pieces that were not distributed. The default value is `134,543`. The value 0 switches the check off.
 - `--total-esperado N` sets the expected total for destruction. The default value is `344,451`. The value 0 switches the check off.
+- `--procesos N` reads N pages at the same time, in N separate processes. The default is automatic: one process for each processor core, at most 8, and not more than the free memory allows (about 1.2 GB for each process). The value 1 reads one page after the other in a single process.
+- `--sin-cache` reads every page again, even when it is in the cache (see below).
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
@@ -125,16 +127,21 @@ The files whose name contains `FALTA REVISION` are read only to report what they
 
 The folder `paginas` contains an image (PNG) of every page that needs a person: pages without readable quantities, pages with quantities of batches that do not match, suspicious quantities, corrected quantities, quantities with a batch number that is not in the Excel file, and pages of PDFs that are marked as bad. revisar_a_mano.txt names the image next to each problem, so that a page can be checked without opening the PDF. The images cannot be created on FreeBSD, OpenBSD and NetBSD.
 
+The folder `cache` contains what was read from each page, one small file for each page and reading. The next run uses these files instead of reading the pages again, so a second run takes seconds instead of minutes. A file in the cache belongs to the content of a PDF, not to its name: when a PDF is renamed, for example to add `FALTA REVISION`, its pages are not read again; when a PDF is replaced by a new version, its pages are read again. Files of PDFs that are no longer in the folder are deleted at the end of a run. You can delete the folder `cache` at any time.
+
 `sin_resultado.log` contains, for every PDF that produced no quantity, the reason, the complete text that the program read from it and the decisions that the program made. Look at this file first when a PDF is not read correctly.
 
 ## Console messages
 
-While it runs, lotes_auto.py shows one line for each PDF. The text after the arrow says how many withdrawn and not distributed quantities were read, whether the PDF is a withdrawal report, and whether the text was read directly (`texto`) or with OCR (`OCR`). Other messages:
+While it runs, lotes_auto.py shows one line for each PDF when all of its pages have been read. Because several pages are read at the same time, the PDFs are not always shown in alphabetical order. In brackets, the line shows the number of pages and the seconds that were needed to read them, or `cache` when the pages came from the cache. The text after the arrow says how many withdrawn and not distributed quantities were read, whether the PDF is a withdrawal report, and whether the text was read directly (`texto`) or with OCR (`OCR`). Other messages:
 
 - `-> omitido (FALTA REVISION)` means that the program skipped the file because of its name.
 - `-> escaneado, OCR no disponible` means that the PDF is scanned and that no OCR engine is installed.
 - `-> ERROR` means that the program could not open or read the file.
-- `Segunda lectura` means that the program reads doubtful scanned PDFs a second time.
+- `Nuevas lecturas` means that the program reads the doubtful pages of the doubtful scanned PDFs again. Each line names the pages that were read again.
+- `... sigue leyendo` means that one page has taken a long time. It is shown every 45 seconds while the page is read, with the PDF and the page number, so that a slow page can be found.
+- `*** ... se deja sin leer` means that one page took more than 600 seconds. The program stops reading this page, continues with the other pages, and lists the PDF in revisar_a_mano.txt with the reason. The page is read again in the next run.
+- `Tiempo` at the end shows the duration of the run, the number of pages that were read, and the number of pages that came from the cache.
 
 At the end, the program shows the three totals and compares the total for destruction with the expected total. The word `COINCIDE` means that the totals are equal. Otherwise the difference is shown. Then it lists the PDFs that are marked as bad.
 
@@ -165,6 +172,8 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 `LOTE_ID` is the pattern for a valid batch number. The default value accepts exactly eight digits that start with `25` or `26`. For example, to also accept batch numbers that start with `24`, change `2[56]` to `2[456]`.
 
 `OCR_DPI` is the resolution of the first and the third OCR reading, and `OCR_DPI_REINTENTO` is the resolution of the second OCR reading. The pages are not converted to black and white, because in tests the OCR engine read such pages much worse. `CONFIANZA_MINIMA` is the OCR confidence below which a quantity that is not verified is listed as suspicious.
+
+`PROCESOS` is the number of processes that read pages at the same time. The default value `0` means automatic. `LADO_MAX_PX` is the largest size, in pixels, of the longer side of a page image for the OCR. The default value is `6000`. The OCR engine reduces every image to 2000 pixels anyway, so this limit does not change the result for normal pages. It prevents huge images, for example from scans that were saved with 72 dots per inch, whose pages are about one meter high. `LADO_MAX_PX_AMPLIADA` is the same limit for the third reading before the image is enlarged. `USAR_CACHE` decides whether the cache is used. `CACHE_VERSION` is part of the name of every cache file; change it to make the program ignore the cache, for example after a change to the OCR settings. `AVISO_LENTO_S` is the number of seconds after which a slow page is reported. `LIMITE_PAGINA_S` is the number of seconds after which a page is given up. The default value is `600`.
 
 `PRIORIDAD_RENGLON` decides which quantity row is used in forms in which each column describes one product.
 
@@ -364,7 +373,7 @@ The OCR reads handwritten numbers when they are written clearly. It does not rel
 
 The OCR can read a digit wrongly, especially when a scan is blurred. Quantities that are verified by a price, a printed total or the withdrawal report are reliable. Quantities that are not verified should be compared with the PDF.
 
-The second OCR reading takes time. When the total does not match, all scanned PDFs with quantities that are not verified are read again, so a run can take about twice as long.
+If a process stops unexpectedly, for example because the memory is full, the program reads the remaining pages one after the other in a single process. The OCR takes about one to five seconds for each page and process. The first run over a large folder therefore takes some minutes. The next runs use the cache and take seconds. Only the doubtful pages are read a second and a third time.
 
 The program expects quantities to be whole numbers of pieces. It does not convert documents that count boxes or other units.
 

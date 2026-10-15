@@ -4,7 +4,7 @@
 #
 # The results are written to /path/to/pdfs/resultados_lotes. The container needs no
 # network access: add --network none.
-FROM docker.io/library/python:3.12-slim
+FROM docker.io/library/python:3.14-slim
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --root-user-action=ignore -r /app/requirements.txt \

@@ -36,12 +36,24 @@ import pdfplumber
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 # ============================== CONFIGURACION ===============================
 # Total esperado de la tabla "Cantidad total para destruccion" (None = sin comprobar).
 TOTAL_ESPERADO = 344451
-# Topes por lote. Un lote que los supera indica un error de lectura o un duplicado.
+# Totales esperados de cada tabla (suman TOTAL_ESPERADO; None = sin comprobar).
+TOTAL_RETIRADO_ESPERADO = 209908
+TOTAL_NO_DISTRIBUIDA_ESPERADO = 134543
+# Excel de referencia con, por lote, la cantidad no distribuida (inventarios) y la
+# cantidad retirada segun clientes. Se busca solo en la carpeta y sus subcarpetas (o se
+# indica con --excel). De el se toma la cantidad no distribuida; la cantidad retirada
+# se calcula con los PDFs y se compara, lote por lote, con la del Excel.
+EXCEL_REFERENCIA = None
+# Con Excel de referencia, los lotes que no estan en el Excel no se suman (casi siempre
+# son numeros de lote mal leidos); se listan en revisar_a_mano.txt.
+SOLO_LOTES_DEL_EXCEL = True
+# Topes por lote: ningun lote por si solo puede pasar de estas cantidades (no son topes
+# de la suma de la tabla). Un lote que los supera indica un error de lectura o un duplicado.
 MAX_RETIRADO_POR_LOTE = 48042
 MAX_NO_DISTRIBUIDA_POR_LOTE = 82090
 # Los reportes de retiro (fabricado / distribuido / no distribuido / retirado / total)
@@ -56,8 +68,8 @@ USAR_REPORTE_PARA_RETIRADO = False
 DUPLICADOS_EN_ARCHIVO = "iguales"
 # PDFs cuyo nombre contiene esto se omiten (no cuentan en ningun total).
 OMITIR_NOMBRE = re.compile(r"falta[\s_\-]*revisi[oó]n", re.I)
-# Numero de lote valido: 8 digitos que empiezan con 24, 25 o 26.
-LOTE_ID = re.compile(r"(?<![\d.,])(2[456]\d{6})(?![\d]|[.,]\d)")
+# Numero de lote valido: 8 digitos que empiezan con 25 o 26.
+LOTE_ID = re.compile(r"(?<![\d.,])(2[56]\d{6})(?![\d]|[.,]\d)")
 # OCR: resolucion de la primera lectura y de la segunda (solo PDFs dudosos).
 OCR_DPI = 300
 OCR_DPI_REINTENTO = 400
@@ -68,13 +80,14 @@ PRIORIDAD_RENGLON = ["devuel", "recibid", "retir", "recuper", "pieza", "cantidad
 
 # Significado de los encabezados de columna (texto sin acentos y en minusculas).
 SEMANTICA = {
-    "ret": r"retir|recuper|devuel|devoluc|recib|recolect|regres",
+    "ret": r"retir|recuper|devuel|devoluc|devolv|recib|recolect|regres",
     "nod": r"no\s*distribu|sin\s*distribu|inventari|existenci|stock|almacen|retenid|cuarentena|bloquead|saldo",
     "orig": r"factur|fabric|producid|produccion|liberad|vendid|surtid|pedid|solicitad|enviad|remitid"
             r"|(?<!no )(?<!sin )distribuid",
     "caja": r"caja",
     "cant": r"cantidad|\bcant\b|pieza|\bpzas?\b|\bpzs\b|unidades|\buds\b|frasco|ampollet|ampula|vial",
     "total": r"total|destruc",
+    "nocant": r"motivo|folio|clave|codigo|telefono|\bcp\b|\bsap\b",
 }
 SEMANTICA = {k: re.compile(v) for k, v in SEMANTICA.items()}
 
@@ -96,7 +109,7 @@ FECHA_RE = re.compile(
     r"|\d{1,2}[/\-. ]?" + MESES + r"[/\-. ]?\d{2,4}|" + MESES + r"[/\-. ]?\d{2,4}|\d{1,2}/\d{4})$", re.I)
 DINERO_RE = re.compile(r"^(?:[$sS]\s*)?(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}$|^[$sS]\s*(\d{1,3}(?:,\d{3})+|\d+)$")
 UNIDAD_RE = re.compile(r"^(\d[\d.,]*)\s*(pzas?|piezas?|pzs|pz|uds?|unidades|frascos?|amp\w*|viales?|cajas?)\.?$", re.I)
-MARCAS = "✓✔√/\\|*·~'\"`´¨°º"
+MARCAS = "✓✔√/\\|*·~'\"`´¨°º-–—_•▪◂▸►"
 LOTE_PREFIJO_OK = re.compile(r"(?:l[o0]te|lot|serie|no|num|n|l)$", re.I)
 LOTE_PALABRA = re.compile(r"l[o0]te|serie|serial|n/s|s/n", re.I)
 
@@ -229,6 +242,8 @@ class Lectura:
     pasada: int = 1
     error: str = ""
     avisos: list = field(default_factory=list)
+    paginas: int = 0
+    conf_media: float = 1.0
 
 
 class OCRNoDisponible(Exception):
@@ -367,10 +382,25 @@ def es_marca(texto):
     return bool(re.fullmatch(r"[✓✔√/\\|*vVyY]", texto.strip()))
 
 
+def unir_lotes_partidos(toks):
+    """El OCR a veces parte un lote escrito a mano: "262402 54" -> "26240254"."""
+    res = []
+    for t in toks:
+        if res:
+            p = res[-1]
+            junto = p.text + t.text
+            if (p.text.isdigit() and t.text.isdigit() and len(junto) == 8 and lotes_en(junto)
+                    and not lotes_en(p.text) and t.x0 - p.x1 < 1.2 * max(p.h, t.h)):
+                res[-1] = Tok(p.x0, t.x1, p.y, max(p.h, t.h), junto, min(p.conf, t.conf), p.caja)
+                continue
+        res.append(t)
+    return res
+
+
 def armar_celdas(renglon):
     """Une palabras cercanas en celdas, sin juntar nunca dos valores numericos."""
     grupos = []
-    for t in renglon.toks:
+    for t in unir_lotes_partidos(renglon.toks):
         if grupos:
             g = grupos[-1]
             ult = g[-1]
@@ -707,6 +737,9 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
             if s["caja"] and not re.search(r"pieza", sin_acentos(heads[k])):
                 p -= 4
                 por.append("cuenta cajas")
+            if s["nocant"] and not s["cant"]:
+                p -= 3
+                por.append("encabezado de motivo, folio o codigo")
             vals = [M[i][k] for i in range(n)]
             rel = 0
             for i, it in enumerate(tabla):
@@ -725,6 +758,10 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
                 por.append("unica columna de enteros")
             if all(v is not None and v >= 1_000_000 for v in vals):
                 p -= 5
+            conocidos = [v for v in vals if v is not None]
+            if n >= 3 and len(set(conocidos)) == 1:
+                p -= 2
+                por.append("mismo valor en todos los renglones")
             puntos[k], detalles[k] = p, por
         if not puntos:
             traza.append(f"pagina {pnum}: tabla de {n} renglon(es) sin columna de enteros utilizable")
@@ -763,6 +800,17 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
     return entradas, referencias
 
 
+def sin_marca(v):
+    """Valores posibles si una raya o palomita a mano se leyo como 1, 7 o 4."""
+    t = str(v)
+    res = set()
+    if len(t) > 1 and t[0] in "17":
+        res.add(int(t[1:]))
+    if len(t) > 1 and t[-1] in "174":
+        res.add(int(t[:-1]))
+    return [x for x in res if x > 0]
+
+
 def verificar_tabla(nuevas, enteros_doc, dinero_doc, totales_rotulados):
     """Compara la suma de la tabla con los totales impresos. Si el total rotulado de
     piezas no coincide y solo un renglon no esta verificado, lo corrige cuando el
@@ -796,6 +844,14 @@ def verificar_tabla(nuevas, enteros_doc, dinero_doc, totales_rotulados):
                 e.piezas = correcto
                 e.verificado.append("corregido con el total y el importe impresos")
                 continue
+        cand = [(e, v) for e in sin_verif for v in sin_marca(e.piezas) if suma - e.piezas + v == total]
+        if len(cand) == 1:
+            e, v = cand[0]
+            e.notas.append(f"CORREGIDO: se leyo {fmt(e.piezas)}; una marca a mano junto al numero se leyo como "
+                           f"digito; con {fmt(v)} la tabla suma el total impreso ({fmt(total)})")
+            e.piezas = v
+            e.verificado.append("corregido con el total de piezas impreso")
+            continue
         for e in nuevas:
             e.fallas.append(f"la suma de la tabla ({fmt(suma)}) no coincide con el total de piezas "
                             f"impreso ({fmt(total)})")
@@ -842,7 +898,34 @@ def analizar_pagina(renglones, pnum, traza):
 
 
 def deduplicar_en_archivo(entradas, avisos, traza):
-    """El mismo lote repetido en el mismo PDF no se suma dos veces."""
+    """El mismo lote repetido en el mismo PDF no se suma dos veces.
+
+    1) Dos paginas con exactamente los mismos lotes son el mismo documento (p. ej. la
+       devolucion por lote y su detalle, o el acuse impreso dos veces): se cuenta una,
+       de preferencia la que cuadra con su total impreso.
+    2) Un lote en varias paginas con la misma cantidad se cuenta una vez; una pagina que
+       es la suma de las otras no se cuenta."""
+    paginas = defaultdict(list)
+    for e in entradas:
+        paginas[e.pagina].append(e)
+    nums = sorted(paginas)
+    for i, a in enumerate(nums):
+        for b in nums[i + 1:]:
+            ea = [e for e in paginas[a] if not e.excluido]
+            eb = [e for e in paginas[b] if not e.excluido]
+            la, lb = {(e.tipo, e.lote) for e in ea}, {(e.tipo, e.lote) for e in eb}
+            if len(la) < 2 or la != lb:
+                continue
+            ver = lambda es: sum(1 for e in es if any("total impreso" in v for v in e.verificado))
+            sa, sb = sum(e.piezas for e in ea), sum(e.piezas for e in eb)
+            quedar, quitar = (a, eb) if ver(ea) >= ver(eb) else (b, ea)
+            for e in quitar:
+                e.excluido = f"la pagina {e.pagina} repite los mismos lotes que la pagina {quedar}"
+            traza.append(f"paginas {a} y {b}: mismos lotes ({len(la)}); se cuenta la pagina {quedar}")
+            if sa != sb:
+                avisos.append(f"las paginas {a} y {b} tienen los mismos lotes pero suman distinto "
+                              f"({fmt(sa)} y {fmt(sb)}); se conto la pagina {quedar}"
+                              + (" porque cuadra con su total impreso" if ver(ea) != ver(eb) else ""))
     por = defaultdict(list)
     for e in entradas:
         por[(e.tipo, e.lote)].append(e)
@@ -852,19 +935,15 @@ def deduplicar_en_archivo(entradas, avisos, traza):
         paginas = defaultdict(list)
         for e in es:
             paginas[e.pagina].append(e)
-        for p, pes in paginas.items():          # dentro de una pagina
-            vistos = set()
-            for e in pes:
-                if e.piezas in vistos:
-                    e.excluido = f"renglon repetido (lote {lote}, {fmt(e.piezas)}) en la misma pagina"
-                vistos.add(e.piezas)
+        for p, pes in paginas.items():          # dentro de una pagina: renglon de total
             activos = [e for e in pes if not e.excluido]
             if len(activos) >= 3:
                 for e in activos:
                     if e.piezas == sum(x.piezas for x in activos if x is not e):
                         e.excluido = "renglon de total del lote"
                         break
-        sumas = {p: sum(e.piezas for e in pes if not e.excluido) for p, pes in paginas.items()}
+        sumas = {p: sum(e.piezas for e in pes if not e.excluido) for p, pes in paginas.items()
+                 if any(not e.excluido for e in pes)}
         if len(sumas) < 2:
             continue
         orden = sorted(sumas)
@@ -894,11 +973,13 @@ def deduplicar_en_archivo(entradas, avisos, traza):
 
 def leer_pdf(ruta, nombre, pasada=1, traza=None):
     traza = [] if traza is None else traza
-    entradas, refs, lineas, fuentes, tipos, avisos = [], [], [], set(), [], []
+    entradas, refs, lineas, fuentes, tipos, avisos, confs = [], [], [], set(), [], [], []
     with pdfplumber.open(ruta) as doc:
+        npag = len(doc.pages)
         for pnum, page in enumerate(doc.pages, 1):
             toks, fuente = page_tokens(page, pasada)
             fuentes.add(fuente)
+            confs += [t.conf for t in toks]
             renglones = agrupar_renglones(toks)
             lineas += [r.texto for r in renglones]
             traza.append(f"pagina {pnum}: {len(renglones)} renglones ({fuente})")
@@ -919,7 +1000,8 @@ def leer_pdf(ruta, nombre, pasada=1, traza=None):
         r.archivo = nombre
     deduplicar_en_archivo(entradas, avisos, traza)
     fuente = "mixto" if len(fuentes) > 1 else (fuentes.pop() if fuentes else "")
-    return Lectura(nombre, entradas, refs, lineas, fuente, traza, pasada, avisos=avisos)
+    return Lectura(nombre, entradas, refs, lineas, fuente, traza, pasada, avisos=avisos, paginas=npag,
+                   conf_media=sum(confs) / len(confs) if confs else 0.0)
 
 
 def calidad(L):
@@ -936,6 +1018,97 @@ def dudosa(L):
     return any(e.fallas or (not e.verificado and e.conf < CONFIANZA_MINIMA) for e in ents)
 
 
+# --------------------------- Excel de referencia ---------------------------
+@dataclass
+class ExcelRef:
+    ruta: str
+    hoja: str
+    col_lote: str
+    col_nod: str
+    col_ret: str
+    refs: dict
+    avisos: list
+
+
+def leer_excel_referencia(ruta):
+    """Busca en el libro una hoja con una columna 'no distribuida' y lee, por lote, la
+    cantidad no distribuida y (si existe) la cantidad retirada segun clientes. Devuelve
+    None si el libro no tiene esa columna."""
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+    wb = load_workbook(ruta, data_only=True, read_only=True)
+    for ws in wb.worksheets:
+        filas = list(ws.iter_rows(values_only=True))
+        c_nod = c_ret = fila_enc = None
+        for i, fila in enumerate(filas[:60]):
+            for j, v in enumerate(fila):
+                t = sin_acentos(str(v)) if v is not None else ""
+                if c_nod is None and re.search(r"no\s*distribu", t):
+                    c_nod, fila_enc = j, i
+                elif c_ret is None and "retirad" in t and "total" not in t and "destruc" not in t:
+                    c_ret = j
+                    fila_enc = i if fila_enc is None else max(fila_enc, i)
+        if c_nod is None:
+            continue
+        # columna de lote: la que tiene mas lotes validos debajo del encabezado
+        cuenta = Counter()
+        for fila in filas[fila_enc + 1:]:
+            for j, v in enumerate(fila):
+                if v is not None and lotes_en(str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)):
+                    cuenta[j] += 1
+        if not cuenta:
+            continue
+        c_lote = cuenta.most_common(1)[0][0]
+        refs, avisos = {}, []
+        sin_valor = 0
+        for n, fila in enumerate(filas[fila_enc + 1:], fila_enc + 2):
+            v = fila[c_lote] if c_lote < len(fila) else None
+            if v is None:
+                continue
+            lotes = lotes_en(str(int(v)) if isinstance(v, float) and v.is_integer() else str(v))
+            if not lotes:
+                continue
+            def num(c):
+                x = fila[c] if c is not None and c < len(fila) else None
+                if isinstance(x, (int, float)):
+                    return int(round(x))
+                if isinstance(x, str) and a_entero(x.strip()) is not None:
+                    return a_entero(x.strip())
+                return None
+            nod, ret = num(c_nod), num(c_ret)
+            if nod is None and fila[c_nod] not in (None, ""):
+                sin_valor += 1
+            lote = lotes[0]
+            if lote in refs:
+                avisos.append(f"el lote {lote} aparece dos veces en el Excel (fila {n}); se suman")
+                r = refs[lote]
+                r.nod = (r.nod or 0) + (nod or 0)
+                r.ret = None if r.ret is None and ret is None else (r.ret or 0) + (ret or 0)
+                continue
+            refs[lote] = Referencia(pathlib.Path(ruta).name, 0, lote, ret, nod or 0, None, True)
+        if sin_valor:
+            avisos.append(f"{sin_valor} celda(s) de 'no distribuida' sin valor calculado (formulas sin "
+                          "resultado guardado): abre el Excel, guardalo y vuelve a correr el programa")
+        if refs:
+            letra = lambda c: get_column_letter(c + 1) if c is not None else "-"
+            return ExcelRef(str(ruta), ws.title, letra(c_lote), letra(c_nod), letra(c_ret), refs, avisos)
+    return None
+
+
+def buscar_excel(folder):
+    """Primer .xlsx/.xlsm de la carpeta (o subcarpetas) con una columna 'no distribuida'."""
+    candidatos = sorted(p for p in folder.rglob("*") if p.suffix.lower() in (".xlsx", ".xlsm")
+                        and not p.name.startswith("~$") and not p.name.lower().startswith("totales_lotes"))
+    for p in candidatos:
+        try:
+            x = leer_excel_referencia(p)
+        except Exception:
+            continue
+        if x:
+            return x
+    return None
+
+
 # ---------------------------- conciliacion ---------------------------------
 @dataclass
 class Resultado:
@@ -947,10 +1120,26 @@ class Resultado:
     total: int
 
 
+FUERA_EXCEL = "el lote no esta en el Excel de referencia"
+ESPERADOS = {"ret": TOTAL_RETIRADO_ESPERADO, "nod": TOTAL_NO_DISTRIBUIDA_ESPERADO, "total": TOTAL_ESPERADO}
+
+
+def comparar(valor, esperado):
+    if esperado is None:
+        return ""
+    d = valor - esperado
+    return "COINCIDE" if d == 0 else f"DIFERENCIA {d:+,} ({'faltan' if d < 0 else 'sobran'} {fmt(abs(d))} piezas)"
+_EXCEL = None                               # ExcelRef de la corrida actual
+
+
 def conciliar(lecturas):
+    excel = _EXCEL
     ret, nod_doc = defaultdict(int), defaultdict(int)
     for L in lecturas.values():
         for e in L.entradas:
+            if excel and SOLO_LOTES_DEL_EXCEL and e.tipo == "ret" and e.lote not in excel.refs \
+                    and not e.excluido:
+                e.excluido = FUERA_EXCEL
             if not e.excluido:
                 (ret if e.tipo == "ret" else nod_doc)[e.lote] += e.piezas
     refs = {}
@@ -958,10 +1147,16 @@ def conciliar(lecturas):
         for r in L.referencias:
             if r.lote not in refs or (r.cuadra and not refs[r.lote].cuadra):
                 refs[r.lote] = r
-    nod, nod_fuente = dict(nod_doc), {l: "documentos" for l in nod_doc}
+    if excel:                               # el Excel manda sobre los reportes en PDF
+        refs.update(excel.refs)
+        nod = {l: r.nod for l, r in excel.refs.items() if r.nod}
+        nod_fuente = {l: "Excel" for l in nod}
+    else:
+        nod, nod_fuente = dict(nod_doc), {l: "documentos" for l in nod_doc}
+        for lote, r in refs.items():
+            if r.nod is not None and lote not in nod_doc:
+                nod[lote], nod_fuente[lote] = r.nod, "reporte"
     for lote, r in refs.items():
-        if r.nod is not None and lote not in nod_doc:
-            nod[lote], nod_fuente[lote] = r.nod, "reporte"
         if USAR_REPORTE_PARA_RETIRADO and r.ret is not None and lote not in ret:
             ret[lote] = r.ret
     problemas = []
@@ -973,7 +1168,7 @@ def conciliar(lecturas):
             problemas.append(("tope", "nod", lote, nv, MAX_NO_DISTRIBUIDA_POR_LOTE))
         if r and r.ret is not None and not r.acepta_ret(rv):
             problemas.append(("reporte", "ret", lote, rv, r.ret))
-        if r and r.nod is not None and lote in nod_doc and nod_doc[lote] != r.nod:
+        if not excel and r and r.nod is not None and lote in nod_doc and nod_doc[lote] != r.nod:
             problemas.append(("reporte", "nod", lote, nod_doc[lote], r.nod))
     total = sum(ret.values()) + sum(nod.values())
     return Resultado(dict(ret), nod, refs, nod_fuente, problemas, total)
@@ -996,8 +1191,27 @@ def ordenar_copias(entradas):
                                            len(e.archivo), e.archivo))
 
 
+def lote_parecido(a, b):
+    """Mismo largo y un digito distinto, o dos digitos vecinos cambiados de lugar."""
+    if len(a) != len(b) or a == b:
+        return False
+    dif = [i for i in range(len(a)) if a[i] != b[i]]
+    return len(dif) == 1 or (len(dif) == 2 and dif[1] == dif[0] + 1
+                             and a[dif[0]] == b[dif[1]] and a[dif[1]] == b[dif[0]])
+
+
 def cambiar_lectura(lecturas, alternativas, f):
     lecturas[f], alternativas[f] = alternativas[f], lecturas[f]
+
+
+def valor_global():
+    """(funcion, esperado) para comparar el resultado global: el total retirado si se
+    conoce (es lo que sale de los PDFs); si no, el total para destruccion."""
+    if ESPERADOS.get("ret") is not None:
+        return (lambda r: sum(r.ret.values())), ESPERADOS["ret"]
+    if ESPERADOS.get("total") is not None:
+        return (lambda r: r.total), ESPERADOS["total"]
+    return None
 
 
 def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correcciones):
@@ -1049,12 +1263,64 @@ def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correc
             c.excluido = f"copia de {orig.archivo} (mismo lote y cantidad)"
             malos.setdefault(c.archivo, []).append(
                 f"lote {lote}: {fmt(c.piezas)} piezas repetidas de {orig.archivo}; sin esta copia el lote "
-                + ("cuadra con el reporte" if objetivo is not None else "queda dentro del tope"))
+                + (f"cuadra con {refobj.archivo}" if objetivo is not None else "queda dentro del tope"))
+            continue
+        if tipo != "ret" or objetivo is None:
+            continue
+        actual = sum(e.piezas for L in lecturas.values() for e in L.entradas
+                     if not e.excluido and e.tipo == tipo and e.lote == lote)
+        # d0) PDF con dos paginas iguales que no coinciden: contar la otra copia del lote
+        arreglos = []
+        for L in lecturas.values():
+            otras = [e for e in L.entradas if e.lote == lote and e.tipo == tipo
+                     and e.excluido.startswith("la pagina") and "repite los mismos lotes" in e.excluido]
+            if not otras:
+                continue
+            contadas = [e for e in L.entradas if e.lote == lote and e.tipo == tipo and not e.excluido]
+            nuevo = actual - sum(e.piezas for e in contadas) + sum(e.piezas for e in otras)
+            if nuevo != actual and refobj.acepta_ret(nuevo):
+                arreglos.append((L, contadas, otras))
+        if len(arreglos) == 1:
+            L, contadas, otras = arreglos[0]
+            pag = otras[0].pagina
+            for e in contadas:
+                e.excluido = f"se uso la copia de la pagina {pag}, que cuadra con {refobj.archivo}"
+            for e in otras:
+                e.excluido = ""
+            correcciones.append(f"lote {lote}: {L.archivo} tiene dos copias que no coinciden; se usa la de la "
+                                f"pagina {pag} (con ella el lote cuadra exactamente)")
+            continue
+        # e) faltan piezas: un renglon con el numero de lote mal leido (un digito distinto
+        #    o dos digitos cambiados de lugar) que no esta en el Excel y completa el lote exacto
+        if actual < objetivo:
+            cand = [e for L in lecturas.values() for e in L.entradas
+                    if e.excluido == FUERA_EXCEL and e.tipo == tipo and lote_parecido(e.lote, lote)
+                    and refobj.acepta_ret(actual + e.piezas)]
+            if len(cand) == 1:
+                e = cand[0]
+                e.notas.append(f"CORREGIDO: el lote se leyo {e.lote}; es {lote} (un digito distinto) y con "
+                               f"{fmt(e.piezas)} piezas el lote cuadra exactamente con {refobj.archivo}")
+                correcciones.append(f"lote {lote}: {e.archivo} p{e.pagina} tenia el lote leido como {e.lote}")
+                e.lote, e.excluido = lote, ""
+                continue
+        # f) sobran piezas: una raya o palomita a mano leida como digito (1, 7 o 4)
+        if actual > objetivo:
+            cand = [(e, v) for L in lecturas.values() for e in L.entradas
+                    if not e.excluido and e.tipo == tipo and e.lote == lote and not e.verificado
+                    for v in sin_marca(e.piezas) if refobj.acepta_ret(actual - e.piezas + v)]
+            if len(cand) == 1:
+                e, v = cand[0]
+                e.notas.append(f"CORREGIDO: se leyo {fmt(e.piezas)}; una marca a mano junto al numero se leyo "
+                               f"como digito; con {fmt(v)} el lote cuadra exactamente con {refobj.archivo}")
+                correcciones.append(f"lote {lote}: {e.archivo} p{e.pagina} {fmt(e.piezas)} -> {fmt(v)}")
+                e.piezas = v
 
-    if total_esperado is None:
+    medir = valor_global()
+    if medir is None:
         return
+    total_esperado = medir[1]
     res2 = conciliar(lecturas)
-    dif = res2.total - total_esperado
+    dif = medir[0](res2) - total_esperado
     if dif == 0:
         return
     # c) total global: otra lectura de un solo PDF que haga coincidir el total exacto
@@ -1064,7 +1330,7 @@ def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correc
             continue
         prueba = dict(lecturas)
         prueba[f] = alt
-        if conciliar(prueba).total == total_esperado:
+        if medir[0](conciliar(prueba)) == total_esperado:
             arreglos.append(f)
     if len(arreglos) == 1:
         f = arreglos[0]
@@ -1131,14 +1397,19 @@ def escribir_excel(ruta, res, total_esperado):
         ws.column_dimensions["BEH"[t]].width = 20
     ws.column_dimensions["C"].width = 3
     ws.column_dimensions["F"].width = 3
-    if total_esperado is not None:
-        ws.cell(fin + 2, 7, "Total esperado")
-        c = ws.cell(fin + 2, 8, total_esperado)
+    valores = {"ret": sum(res.ret.values()), "nod": sum(res.nod.values()), "total": res.total}
+    for t, clave in enumerate(("ret", "nod", "total")):
+        e = ESPERADOS[clave] if clave != "total" else total_esperado
+        if e is None:
+            continue
+        c0, col = 1 + 3 * t, "BEH"[t]
+        ws.cell(fin + 2, c0, "Esperado")
+        c = ws.cell(fin + 2, c0 + 1, e)
         c.number_format = "#,##0"
-        ws.cell(fin + 3, 7, "Diferencia")
-        c = ws.cell(fin + 3, 8, f"=H{fin}-H{fin + 2}")
+        ws.cell(fin + 3, c0, "Diferencia")
+        c = ws.cell(fin + 3, c0 + 1, f"={col}{fin}-{col}{fin + 2}")
         c.number_format = "#,##0"
-        if res.total != total_esperado:
+        if valores[clave] != e:
             c.fill = ROJO
     ws.freeze_panes = "A3"
     wb.save(ruta)
@@ -1153,6 +1424,10 @@ def escribir_detalle(ruta, lecturas, res):
     for lote in sorted(set(porlote) | set(res.refs), key=orden_lote):
         rv, nv = res.ret.get(lote, 0), res.nod.get(lote, 0)
         lineas.append(f"{lote}   retirado {fmt(rv)}   no distribuida {fmt(nv)}   total {fmt(rv + nv)}")
+        r0 = res.refs.get(lote)
+        if r0 and r0.pagina == 0:
+            lineas.append(f"      Excel ({r0.archivo}): no distribuida {fmt(r0.nod or 0)}, retirado segun clientes "
+                          + (fmt(r0.ret) if r0.ret is not None else "-"))
         for e in sorted(porlote[lote], key=lambda e: (e.tipo, e.archivo, e.pagina)):
             estado = f"NO SUMADO: {e.excluido}" if e.excluido else (
                 "verificado" if e.verificado else f"sin verificar (confianza {e.conf:.2f})")
@@ -1160,92 +1435,292 @@ def escribir_detalle(ruta, lecturas, res):
             for x in e.verificado + e.fallas + e.notas:
                 lineas.append(f"            - {x}")
         r = res.refs.get(lote)
-        if r:
+        if r and r.pagina:
             lineas.append(f"      reporte ({r.archivo}): retirado {fmt(r.ret) if r.ret is not None else '-'}, "
                           f"no distribuida {fmt(r.nod) if r.nod is not None else '-'}, "
                           f"total {fmt(r.total) if r.total is not None else '-'}"
                           + ("" if r.cuadra else "   (sus columnas no cuadran entre si)"))
-            if res.nod_fuente.get(lote) == "reporte":
-                lineas.append("      la cantidad no distribuida se toma del reporte")
+            if res.nod_fuente.get(lote) in ("reporte", "Excel"):
+                lineas.append(f"      la cantidad no distribuida se toma de {r.archivo}")
         lineas.append("")
     pathlib.Path(ruta).write_text("\n".join(lineas), encoding="utf-8")
 
 
-def escribir_revision(ruta, lecturas, res, total_esperado, omitidos, sin_resultado, malos,
-                      correcciones):
+def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin_resultado, malos,
+                      correcciones, excel, info_omitidos):
+    """Archivo para la persona que revisa: todo lo que no cuadra o no se pudo leer, con el
+    motivo, lo que si se vio en cada PDF y que hacer."""
+    import datetime
     t = []
-    t.append("RESUMEN")
-    t.append(f"   Cantidad de producto retirado:   {fmt(sum(res.ret.values()))}")
-    t.append(f"   Cantidad no distribuida:         {fmt(sum(res.nod.values()))}")
-    t.append(f"   Cantidad total para destruccion: {fmt(res.total)}")
-    if total_esperado is not None:
-        dif = res.total - total_esperado
-        t.append(f"   Total esperado:                  {fmt(total_esperado)}   "
-                 + ("COINCIDE" if dif == 0 else f"DIFERENCIA {dif:+,}"))
+    raya = "=" * 78
+    activas = lambda L: [e for e in L.entradas if not e.excluido]
+    ret_t, nod_t = sum(res.ret.values()), sum(res.nod.values())
+    sin_res = dict(sin_resultado)
+    t += [raya, f"REVISION A MANO - lotes_auto.py {VERSION} - {datetime.datetime.now():%d/%m/%Y %H:%M}",
+          f"Carpeta: {folder}", raya, ""]
+
+    # 1. Resumen
+    n_pdfs = len(lecturas) + len(omitidos) + sum(1 for f in sin_res if f not in lecturas)
+    con_cant = sum(1 for L in lecturas.values() if activas(L))
+    reportes = sum(1 for L in lecturas.values() if L.referencias and not activas(L))
+    t.append("1. RESUMEN")
+    t.append(f"   PDFs encontrados: {n_pdfs}   (con cantidades: {con_cant}; reportes: {reportes}; "
+             f"sin cantidades legibles: {len(sin_res)}; omitidos por FALTA REVISION: {len(omitidos)})")
+    if excel:
+        sk = sum(r.ret or 0 for r in excel.refs.values())
+        sj = sum(r.nod or 0 for r in excel.refs.values())
+        t.append(f"   Excel de referencia: {excel.ruta}")
+        t.append(f"      hoja '{excel.hoja}'; columnas: lote {excel.col_lote}, no distribuida {excel.col_nod}, "
+                 f"retirado segun clientes {excel.col_ret}")
+        t.append(f"      {len(excel.refs)} lotes; no distribuida {fmt(sj)}; retirado segun clientes {fmt(sk)}; "
+                 f"suma de ambos {fmt(sj + sk)}")
+        t += [f"      AVISO: {a}" for a in excel.avisos]
+    else:
+        t.append("   Excel de referencia: NO SE ENCONTRO. La cantidad no distribuida sale de los PDFs y no se")
+        t.append("      puede comparar lote por lote. Pon el Excel en la carpeta o usa --excel RUTA.")
+    filas_res = [("Cantidad de producto retirado (PDFs)", ret_t, "ret"),
+                 (f"Cantidad no distribuida ({'Excel' if excel else 'PDFs'})", nod_t, "nod"),
+                 ("Cantidad total para destruccion", res.total, "total")]
+    for nombre, v, k in filas_res:
+        e = ESPERADOS[k]
+        t.append(f"   {nombre + ':':<42}{fmt(v):>10}" + (f"   esperado {fmt(e):>10}   {comparar(v, e)}"
+                                                         if e is not None else ""))
+    if excel:
+        t.append(f"   (Excel: retirado segun clientes {fmt(sk)}, diferencia con los PDFs {ret_t - sk:+,})")
+        if ESPERADOS["nod"] is not None and sj != ESPERADOS["nod"]:
+            t.append(f"   AVISO: la columna 'no distribuida' del Excel suma {fmt(sj)}, no {fmt(ESPERADOS['nod'])}: "
+                     "revisa que sea el Excel correcto y que tenga todos los lotes")
     t.append("")
-    t.append(f"PDFs MARCADOS COMO MALOS (prueba concluyente): {len(malos)}")
+
+    # Datos por lote
+    entradas_lote = defaultdict(list)
+    for L in lecturas.values():
+        for e in L.entradas:
+            entradas_lote[(e.tipo, e.lote)].append(e)
+    vistos_sin_leer = defaultdict(list)         # lote -> PDFs sin cantidades que lo mencionan
+    for f, L in lecturas.items():
+        if not activas(L) and not L.referencias:
+            for l in sorted(set(x for linea in L.lineas for x in lotes_en(linea))):
+                vistos_sin_leer[l].append(f)
+    vistos_omitidos = defaultdict(list)
+    for f, L in info_omitidos.items():
+        for l, v in sorted({(e.lote, e.piezas) for e in L.entradas}):
+            vistos_omitidos[l].append(f"{f} ({fmt(v)})")
+        for l in sorted(set(x for linea in L.lineas for x in lotes_en(linea))):
+            if not any(s.startswith(f) for s in vistos_omitidos[l]):
+                vistos_omitidos[l].append(f)
+
+    # 2. Que hacer
+    acciones = []
+    if not excel:
+        acciones.append("Poner el Excel de referencia en la carpeta (o usar --excel RUTA) y volver a correr.")
+    if sin_res:
+        acciones.append(f"Capturar a mano los {len(sin_res)} PDF(s) de la seccion 6: abrir cada uno y anotar "
+                        "lote y piezas.")
+    if res.problemas:
+        acciones.append(f"Revisar los {len(res.problemas)} lote(s) de la seccion 3: la seccion dice que PDFs "
+                        "suman cada lote y que PDFs sin leer u omitidos lo mencionan.")
+    if malos:
+        acciones.append(f"Revisar los {len(malos)} PDF(s) marcados como malos (seccion 7).")
+    fuera = [e for L in lecturas.values() for e in L.entradas if e.excluido == FUERA_EXCEL]
+    if fuera:
+        acciones.append(f"Revisar {len(fuera)} cantidad(es) con un lote que no esta en el Excel (seccion 5): "
+                        "casi siempre es un numero de lote mal leido.")
+    n_sosp = 0
+    for L in lecturas.values():
+        if L.archivo in malos:
+            continue
+        if L.avisos or any(e.fallas or (not e.verificado and e.conf < CONFIANZA_MINIMA)
+                           or any("dudosa" in x for x in e.notas) for e in activas(L)):
+            n_sosp += 1
+    if n_sosp:
+        acciones.append(f"{'Opcional: ' if not acciones else ''}comparar con el PDF las cantidades de los "
+                        f"{n_sosp} PDF(s) sospechosos (seccion 9); se sumaron, pero no estan verificadas.")
+    t.append("2. QUE HACER (en este orden)")
+    t += [f"   {i}. {a}" for i, a in enumerate(acciones, 1)] or ["   Nada: todo cuadra."]
+    t.append("")
+
+    # 3. Lotes que no cuadran
+    t.append(f"3. LOTES QUE NO CUADRAN: {len(res.problemas)}")
+    for clase, tipo, lote, valor, ref in res.problemas:
+        if clase == "tope":
+            t.append(f"   lote {lote}: {TIPOS[tipo]} {fmt(valor)} supera el tope por lote de {fmt(ref)} "
+                     f"(sobran al menos {fmt(valor - ref)})")
+        else:
+            r = res.refs.get(lote)
+            d = valor - ref
+            t.append(f"   lote {lote}: {TIPOS[tipo]} segun los PDFs {fmt(valor)}; segun {r.archivo if r else 'la referencia'} "
+                     f"{fmt(ref)}; diferencia {d:+,} ({'faltan' if d < 0 else 'sobran'} {fmt(abs(d))} piezas)")
+        es = entradas_lote.get((tipo, lote), [])
+        if es:
+            t.append("      lo que se encontro en los PDFs:")
+            for e in sorted(es, key=lambda e: (e.archivo, e.pagina)):
+                estado = (f"NO SUMADO ({e.excluido})" if e.excluido else
+                          "verificado" if e.verificado else f"sin verificar, confianza OCR {e.conf:.2f}")
+                t.append(f"         {fmt(e.piezas):>9}  {e.archivo}  pagina {e.pagina}  [{estado}]")
+        else:
+            t.append("      ningun PDF leido tiene este lote")
+        if vistos_sin_leer.get(lote):
+            t.append(f"      lo mencionan PDFs sin cantidades legibles: {', '.join(vistos_sin_leer[lote])}")
+        if vistos_omitidos.get(lote):
+            t.append(f"      lo mencionan PDFs omitidos por FALTA REVISION: {', '.join(vistos_omitidos[lote])}")
+        if clase == "reporte":
+            exactos = [f"{f} ({fmt(e.piezas)})" for f, L in info_omitidos.items() for e in L.entradas
+                       if e.lote == lote and not e.excluido and e.piezas == abs(valor - ref)]
+            if exactos and valor < ref:
+                t.append(f"      >> la diferencia es EXACTAMENTE lo que trae: {', '.join(exactos)}")
+        if clase == "reporte" and valor < ref:
+            t.append("      causa probable: falta un PDF, un PDF no se pudo leer o esta marcado FALTA REVISION")
+        elif clase == "reporte" or clase == "tope":
+            t.append("      causa probable: un documento duplicado con otro nombre o un numero mal leido")
+    t.append("")
+
+    # 4. Lotes del Excel sin PDFs
+    if excel:
+        sin_pdf = [l for l, r in excel.refs.items() if (r.ret or 0) > 0 and not res.ret.get(l)]
+        t.append(f"4. LOTES DEL EXCEL CON RETIRADO PERO SIN NINGUN PDF: {len(sin_pdf)}")
+        for l in sorted(sin_pdf, key=orden_lote):
+            extra = []
+            if vistos_sin_leer.get(l):
+                extra.append(f"aparece en PDFs sin leer: {', '.join(vistos_sin_leer[l])}")
+            if vistos_omitidos.get(l):
+                extra.append(f"aparece en omitidos: {', '.join(vistos_omitidos[l])}")
+            t.append(f"   lote {l}: Excel {fmt(excel.refs[l].ret)}" + (f"   ({'; '.join(extra)})" if extra else ""))
+        t.append("")
+
+    # 5. Lotes que no estan en el Excel
+    t.append(f"5. CANTIDADES CON UN LOTE QUE NO ESTA EN EL EXCEL (no sumadas): {len(fuera)}")
+    for e in sorted(fuera, key=lambda e: (e.archivo, e.pagina)):
+        parecidos = [l for l in (excel.refs if excel else {}) if lote_parecido(e.lote, l)]
+        t.append(f"   {e.archivo}  pagina {e.pagina}: lote {e.lote}  {fmt(e.piezas)} piezas"
+                 + (f"   -> se parece a {', '.join(parecidos)} del Excel" if parecidos else ""))
+    t.append("")
+
+    # 6. PDFs sin cantidades legibles
+    t.append(f"6. PDFs SIN CANTIDADES LEGIBLES: {len(sin_res)}   (texto completo en sin_resultado.log)")
+    for i, (f, motivo) in enumerate(sorted(sin_res.items()), 1):
+        L = lecturas.get(f)
+        t.append(f"   [{i}] {f}")
+        if L is None:
+            t.append(f"       motivo: {motivo}")
+            t.append("       que hacer: " + ("instalar el OCR y volver a correr, o capturar a mano"
+                                             if "OCR" in motivo else "abrir el PDF; si abre, capturar a mano"))
+            continue
+        t.append(f"       paginas: {L.paginas}; lectura: {L.fuente}"
+                 + (f" (confianza media del OCR {L.conf_media:.2f})" if L.fuente != "texto" else ""))
+        lotes = sorted(set(x for linea in L.lineas for x in lotes_en(linea)))
+        casi = sorted(set(m for linea in L.lineas for m in re.findall(r"(?<!\d)2[0-9]{6,8}(?!\d)", linea)
+                          if not lotes_en(m)))
+        if not L.lineas:
+            why = "no se pudo leer ningun texto (pagina en blanco o imagen ilegible)"
+        elif L.fuente != "texto" and L.conf_media < 0.80:
+            why = ("el texto es muy dificil de leer: casi seguro esta escrito a mano o el escaneo es de "
+                   "baja calidad")
+        elif not lotes:
+            why = "no hay ningun numero de lote valido (8 digitos que empiecen con 25 o 26)"
+        else:
+            why = "se encontraron lotes pero ninguna columna de cantidades confiable"
+        t.append(f"       motivo: {why}")
+        t.append(f"       lotes vistos: {', '.join(lotes) if lotes else 'ninguno'}")
+        if casi:
+            t.append(f"       numeros que podrian ser lotes mal leidos: {', '.join(casi[:10])}")
+        decis = [x for x in L.traza if "tabla" in x or "etiquetas" in x or "lado" in x]
+        t += [f"       analisis: {x}" for x in decis[:4]]
+        t.append("       primeras lineas leidas:")
+        t += [f"          | {x}" for x in L.lineas[:6]] or ["          | (nada)"]
+        t.append("       que hacer: abrir el PDF y capturar a mano lote y piezas; si es un escaneo malo, "
+                 "volver a escanearlo")
+    t.append("")
+
+    # 7-8. Malos y correcciones
+    t.append(f"7. PDFs MARCADOS COMO MALOS (prueba concluyente): {len(malos)}")
     for f, motivos in sorted(malos.items()):
         t.append(f"   {f}")
         t += [f"      - {m}" for m in motivos]
     t.append("")
-    t.append(f"CORRECCIONES APLICADAS: {len(correcciones)}")
-    t += [f"   {c}" for c in correcciones]
+    t.append("8. CORRECCIONES APLICADAS (cada una tiene una prueba exacta)")
+    corr = list(correcciones)
     for L in lecturas.values():
         for e in L.entradas:
-            t += [f"   {e.archivo} p{e.pagina}: {n}" for n in e.notas if n.startswith("CORREGIDO")]
+            corr += [f"{e.archivo} pagina {e.pagina}: {n}" for n in e.notas if n.startswith("CORREGIDO")]
+    t += [f"   {c}" for c in dict.fromkeys(corr)] or ["   ninguna"]
     t.append("")
-    t.append(f"LOTES QUE NO CUADRAN: {len(res.problemas)}")
-    for clase, tipo, lote, valor, ref in res.problemas:
-        fuentes = sorted({f"{e.archivo} ({fmt(e.piezas)})" for L in lecturas.values() for e in L.entradas
-                          if not e.excluido and e.tipo == tipo and e.lote == lote})
-        if clase == "tope":
-            t.append(f"   lote {lote}: {TIPOS[tipo]} {fmt(valor)} supera el tope de {fmt(ref)}")
-        else:
-            t.append(f"   lote {lote}: {TIPOS[tipo]} segun los documentos {fmt(valor)}, segun el reporte {fmt(ref)} "
-                     f"(diferencia {valor - ref:+,})")
-        t.append(f"      documentos: {', '.join(fuentes) or 'ninguno'}")
-    t.append("")
+
+    # 9. Sospechosos
     sospechosos = []
     for L in lecturas.values():
         motivos = []
-        for e in L.entradas:
-            if e.excluido:
-                continue
+        for e in activas(L):
             motivos += [f"lote {e.lote}: {x}" for x in e.fallas]
             if not e.verificado and e.conf < CONFIANZA_MINIMA:
-                motivos.append(f"lote {e.lote}: {fmt(e.piezas)} leido con confianza baja ({e.conf:.2f})")
-            motivos += [f"lote {e.lote}: {x}" for x in e.notas if "dudosa" in x]
+                motivos.append(f"lote {e.lote}: {fmt(e.piezas)} leido con confianza baja ({e.conf:.2f}); "
+                               "comparar con el PDF")
+            motivos += [f"lote {e.lote}: {x}" for x in e.notas if "dudosa" in x or "no reconocido" in x]
         motivos += L.avisos
         if motivos and L.archivo not in malos:
             sospechosos.append((L.archivo, motivos))
-    t.append(f"PDFs SOSPECHOSOS (revisar): {len(sospechosos)}")
+    t.append(f"9. PDFs SOSPECHOSOS (se sumaron; comparar con el PDF): {len(sospechosos)}")
     for f, motivos in sospechosos:
         t.append(f"   {f}")
         t += [f"      - {m}" for m in dict.fromkeys(motivos)]
     t.append("")
-    rep = []
-    for L in lecturas.values():
-        for e in L.entradas:
-            if e.excluido and not e.excluido.startswith("copia de"):
-                rep.append(f"   {e.archivo} p{e.pagina}: lote {e.lote} {fmt(e.piezas)} -> {e.excluido}")
-    t.append(f"REPETICIONES DENTRO DEL MISMO ARCHIVO (no sumadas): {len(rep)}")
+
+    # 10-11. Repeticiones y duplicados
+    rep = [f"   {e.archivo} pagina {e.pagina}: lote {e.lote} {fmt(e.piezas)} -> {e.excluido}"
+           for L in lecturas.values() for e in L.entradas
+           if e.excluido and not e.excluido.startswith("copia de") and e.excluido != FUERA_EXCEL]
+    t.append(f"10. REPETICIONES DENTRO DEL MISMO ARCHIVO (contadas una sola vez): {len(rep)}")
     t += rep
     t.append("")
     por_clave = defaultdict(set)
     for L in lecturas.values():
-        for e in L.entradas:
-            if not e.excluido:
-                por_clave[e.clave()].add(e.archivo)
+        for e in activas(L):
+            por_clave[e.clave()].add(e.archivo)
     dup = [(k, fs) for k, fs in por_clave.items() if len(fs) > 1]
-    t.append(f"MISMO LOTE Y CANTIDAD EN VARIOS ARCHIVOS (posibles duplicados, sumados): {len(dup)}")
+    t.append(f"11. MISMO LOTE Y CANTIDAD EN VARIOS ARCHIVOS (se sumaron; puede ser una copia): {len(dup)}")
     for (tipo, lote, v), fs in dup:
-        t.append(f"   lote {lote} {TIPOS[tipo]} {fmt(v)}: {', '.join(sorted(fs))}")
+        t.append(f"   lote {lote} {fmt(v)}: {', '.join(sorted(fs))}")
     t.append("")
-    t.append(f"PDFs SIN CANTIDADES LEGIBLES: {len(sin_resultado)}")
-    t += [f"   {nm}   [{motivo}]" for nm, motivo in sin_resultado]
+
+    # 12. Omitidos
+    t.append(f"12. PDFs OMITIDOS POR 'FALTA REVISION' (no cuentan en ningun total): {len(omitidos)}")
+    for f in omitidos:
+        L = info_omitidos.get(f)
+        if L is None:
+            t.append(f"   {f}   (no se pudo leer)")
+            continue
+        vals = ", ".join(f"{e.lote}: {fmt(e.piezas)}" for e in L.entradas if not e.excluido)
+        t.append(f"   {f}   (solo informativo: {vals or 'sin cantidades legibles'})")
     t.append("")
-    t.append(f"PDFs OMITIDOS POR 'FALTA REVISION' (no cuentan en ningun total): {len(omitidos)}")
-    t += [f"   {nm}" for nm in omitidos]
+
+    # 13. Todos los PDFs
+    t.append("13. TODOS LOS PDFs")
+    filas = []
+    for f in sorted(set(lecturas) | set(sin_res) | set(omitidos)):
+        L = lecturas.get(f)
+        if f in omitidos:
+            estado = "omitido (FALTA REVISION)"
+        elif L is None:
+            estado = f"no se pudo leer: {sin_res.get(f, '')}"
+        else:
+            a = activas(L)
+            r = sum(e.piezas for e in a if e.tipo == "ret")
+            nd = sum(e.piezas for e in a if e.tipo == "nod")
+            partes = []
+            if r:
+                partes.append(f"{sum(1 for e in a if e.tipo == 'ret')} cantidad(es), {fmt(r)} piezas retiradas")
+            if nd:
+                partes.append(f"{fmt(nd)} piezas no distribuidas"
+                              + (" (solo informativo: se usa el Excel)" if excel else ""))
+            if L.referencias:
+                partes.append(f"reporte con {len(L.referencias)} lotes")
+            if not partes:
+                partes.append("SIN CANTIDADES")
+            if f in malos:
+                partes.append("MALO")
+            estado = "; ".join(partes) + f" [{L.fuente}, {L.paginas} pag.]"
+        filas.append(f"   {f}: {estado}")
+    t += filas
     pathlib.Path(ruta).write_text("\n".join(t) + "\n", encoding="utf-8")
 
 
@@ -1278,16 +1753,48 @@ def main(argv=None):
     ap.add_argument("carpeta", help="carpeta con los PDFs")
     ap.add_argument("--total-esperado", type=int, default=TOTAL_ESPERADO, metavar="N",
                     help=f"total esperado para destruccion (por omision: {TOTAL_ESPERADO}; 0 = no comprobar)")
+    ap.add_argument("--retirado-esperado", type=int, default=TOTAL_RETIRADO_ESPERADO, metavar="N",
+                    help=f"total esperado de producto retirado (por omision: {TOTAL_RETIRADO_ESPERADO}; 0 = no comprobar)")
+    ap.add_argument("--no-distribuida-esperada", type=int, default=TOTAL_NO_DISTRIBUIDA_ESPERADO, metavar="N",
+                    help=f"total esperado no distribuido (por omision: {TOTAL_NO_DISTRIBUIDA_ESPERADO}; 0 = no comprobar)")
+    ap.add_argument("--excel", metavar="RUTA", default=EXCEL_REFERENCIA,
+                    help="Excel de referencia (por omision se busca en la carpeta y subcarpetas)")
     ap.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     args = ap.parse_args(argv)
     esperado = args.total_esperado or None
+    global ESPERADOS
+    ESPERADOS = {"ret": args.retirado_esperado or None, "nod": args.no_distribuida_esperada or None,
+                 "total": esperado}
 
     folder = pathlib.Path(args.carpeta).expanduser()
     if not folder.is_dir():
         print(f"*** No existe la carpeta: {folder}")
         return 2
+    global _EXCEL
+    if args.excel:
+        ruta_x = pathlib.Path(args.excel).expanduser()
+        try:
+            _EXCEL = leer_excel_referencia(ruta_x) if ruta_x.is_file() else None
+        except Exception as e:
+            print(f"*** No se pudo leer el Excel {ruta_x}: {e}")
+            return 2
+        if _EXCEL is None:
+            print(f"*** {ruta_x} no existe o no tiene una columna 'no distribuida' con lotes")
+            return 2
+    else:
+        _EXCEL = buscar_excel(folder)
+    if _EXCEL:
+        sk = sum(r.ret or 0 for r in _EXCEL.refs.values())
+        sj = sum(r.nod or 0 for r in _EXCEL.refs.values())
+        print(f"Excel de referencia: {_EXCEL.ruta} (hoja '{_EXCEL.hoja}', {len(_EXCEL.refs)} lotes; "
+              f"no distribuida {fmt(sj)}, retirado segun clientes {fmt(sk)})")
+        for a in _EXCEL.avisos:
+            print(f"   AVISO: {a}")
+    else:
+        print("*** No se encontro el Excel de referencia: la cantidad no distribuida saldra de los PDFs.")
     pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf")
-    print(f"{len(pdfs)} PDFs encontrados en {folder}")
+    print(f"{len(pdfs)} PDFs encontrados en {folder} (incluye subcarpetas)")
+    info_omitidos = {}
 
     lecturas, rutas, omitidos, sin_resultado, log = {}, {}, [], [], []
     aviso_ocr = False
@@ -1296,7 +1803,11 @@ def main(argv=None):
         print(f"[{n}/{len(pdfs)}] {name}", end="", flush=True)
         if OMITIR_NOMBRE.search(pdf.name):
             omitidos.append(name)
-            print("  -> omitido (FALTA REVISION)")
+            print("  -> omitido (FALTA REVISION; se lee solo para informar)")
+            try:
+                info_omitidos[name] = leer_pdf(pdf, name)
+            except Exception:
+                pass
             continue
         try:
             L = leer_pdf(pdf, name)
@@ -1320,7 +1831,8 @@ def main(argv=None):
     res = conciliar(lecturas)
     alternativas = {}
     problema_lotes = {l for _, _, l, _, _ in res.problemas}
-    hay_que_reintentar = bool(res.problemas) or (esperado is not None and res.total != esperado)
+    medir = valor_global()
+    hay_que_reintentar = bool(res.problemas) or (medir is not None and medir[0](res) != medir[1])
     dudosas = [f for f, L in lecturas.items() if L.fuente in ("OCR", "mixto") and (
         dudosa(L) or any(e.lote in problema_lotes for e in L.entradas)
         or (hay_que_reintentar and any(not e.verificado for e in L.entradas)))]
@@ -1339,7 +1851,7 @@ def main(argv=None):
                 print(f"   {f}: se usa la segunda lectura -> {resumen_archivo(L2)}")
     malos, correcciones = {}, []
     res = conciliar(lecturas)
-    if res.problemas or (esperado is not None and res.total != esperado):
+    if res.problemas or (medir is not None and medir[0](res) != medir[1]):
         intentar_arreglos(lecturas, alternativas, res, esperado, malos, correcciones)
         res = conciliar(lecturas)
     for f, alt in alternativas.items():     # las dos lecturas no coinciden
@@ -1356,7 +1868,7 @@ def main(argv=None):
             ref = None if r is None else (r.ret if e.tipo == "ret" else r.nod)
             total = res.ret.get(e.lote) if e.tipo == "ret" else res.nod.get(e.lote)
             if not e.excluido and ref is not None and (ref == total or (e.tipo == "ret" and r.acepta_ret(total))):
-                e.verificado.append(f"el total del lote coincide con el reporte ({r.archivo})")
+                e.verificado.append(f"el total del lote coincide con {r.archivo}")
     for f, L in lecturas.items():           # cifras que contradicen el propio documento
         fallas = sorted({x for e in L.entradas if not e.excluido for x in e.fallas})
         if fallas:
@@ -1380,7 +1892,8 @@ def main(argv=None):
         return 1
     escribir_detalle(folder / "detalle_lotes.txt", lecturas, res)
     rev = folder / "revisar_a_mano.txt"
-    escribir_revision(rev, lecturas, res, esperado, omitidos, sin_resultado, malos, correcciones)
+    escribir_revision(rev, folder, lecturas, res, esperado, omitidos, sin_resultado, malos, correcciones,
+                      _EXCEL, info_omitidos)
     logf = folder / "sin_resultado.log"
     if log:
         logf.write_text("\n".join(log) + "\n", encoding="utf-8")
@@ -1388,13 +1901,13 @@ def main(argv=None):
         logf.unlink()
 
     ret_t, nod_t = sum(res.ret.values()), sum(res.nod.values())
-    print(f"\nCantidad de producto retirado:   {fmt(ret_t):>12}")
-    print(f"Cantidad no distribuida:         {fmt(nod_t):>12}")
-    print(f"Cantidad total para destruccion: {fmt(res.total):>12}")
-    if esperado is not None:
-        dif = res.total - esperado
-        print(f"Total esperado:                  {fmt(esperado):>12}   "
-              + ("COINCIDE" if dif == 0 else f"*** DIFERENCIA {dif:+,}"))
+    print()
+    for nombre, v, k in (("Cantidad de producto retirado", ret_t, "ret"),
+                         ("Cantidad no distribuida", nod_t, "nod"),
+                         ("Cantidad total para destruccion", res.total, "total")):
+        e = ESPERADOS[k]
+        print(f"{nombre + ':':<33}{fmt(v):>12}" + (f"   esperado {fmt(e):>10}   "
+              + ("COINCIDE" if v == e else "*** " + comparar(v, e)) if e is not None else ""))
     if res.problemas:
         print(f"*** {len(res.problemas)} lote(s) no cuadran (tope o reporte); ver revisar_a_mano.txt")
     if malos:

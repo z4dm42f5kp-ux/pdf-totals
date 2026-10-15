@@ -5,14 +5,14 @@ Languages: [English](README.md), [Deutsch](README.de.md), [Español](README.es.m
 pdf-totals reads a folder of PDF documents about the withdrawal of a product from the market, such as return forms, delivery receipts, goods receipts, inventory lists and withdrawal reports. For each batch number it calculates three quantities and writes them to an Excel file:
 
 - the withdrawn quantity: pieces that were returned or recovered from the market;
-- the not distributed quantity: pieces that are still in inventory;
+- the not distributed quantity: pieces that are still in inventory, taken from a reference Excel file;
 - the total quantity for destruction: the sum of both.
 
 The program does not rely only on the words in the documents. It examines the structure of each table: which column contains whole numbers, which column multiplied by the unit price gives the printed total price, and which column adds up to a printed total. In a withdrawal report it finds the columns by arithmetic, because manufactured minus distributed equals not distributed, and not distributed plus withdrawn equals the total.
 
-The program then checks the result. A batch must not exceed `48,042` withdrawn pieces or `82,090` pieces that were not distributed, and the total for destruction must be exactly `344,451`. If something does not match, doubtful scanned PDFs are read a second time, differences are corrected only when an exact proof exists, and PDFs are marked as bad only on conclusive evidence.
+The withdrawn quantity of each batch is compared with the reference Excel file. No single batch may exceed `48,042` withdrawn pieces or `82,090` pieces that were not distributed. The withdrawn pieces must add up to exactly `209,908`, the not distributed pieces to exactly `134,543`, and the total for destruction to exactly `344,451`. If something does not match, doubtful scanned PDFs are read a second time, differences are corrected only when an exact proof exists, and PDFs are marked as bad only on conclusive evidence.
 
-The program reads the text of PDFs that contain text and reads scanned PDFs with optical character recognition (OCR). It was written for documents about returned pharmaceutical products in Mexico. Its messages and output files are in Spanish. A batch number must have exactly eight digits and start with `24`, `25` or `26`. These rules are easy to change.
+The program reads the text of PDFs that contain text and reads scanned PDFs with optical character recognition (OCR). It was written for documents about returned pharmaceutical products in Mexico. Its messages and output files are in Spanish. A batch number must have exactly eight digits and start with `25` or `26`. These rules are easy to change.
 
 ## Requirements
 

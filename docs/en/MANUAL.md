@@ -9,7 +9,7 @@ diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF do
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] [--total-esperado N] FOLDER
+python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] FOLDER
 python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 ```
 
@@ -18,10 +18,18 @@ python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 lotes_auto.py reads all PDF files in the folder FOLDER and in all of its subfolders. The documents are about the withdrawal of a product from the market: return forms, delivery receipts, goods receipts, inventory lists and withdrawal reports. For each batch number the program calculates three quantities:
 
 - The withdrawn quantity (`Cantidad de producto retirado`). These are the pieces that were returned or recovered from the market. They come from return forms, delivery receipts and goods receipts.
-- The not distributed quantity (`Cantidad no distribuida`). These are the pieces that are still in inventory and were never distributed. They come from inventory documents. If a batch has no inventory document, the quantity is taken from the withdrawal report.
+- The not distributed quantity (`Cantidad no distribuida`). These are the pieces that are still in inventory and were never distributed. They are taken from the reference Excel file, which is described below. Without the reference Excel file, they come from inventory documents and from the withdrawal report.
 - The total quantity for destruction (`Cantidad total para destrucción`). This is the sum of the two other quantities.
 
-The program then checks the result. A batch must not have more than `48,042` withdrawn pieces or more than `82,090` pieces that were not distributed. The total quantity for destruction of all batches must be exactly `344,451`. These limits can be changed in the configuration.
+The program then checks the result. The limits apply to each batch on its own, not to the sum of a table: no single batch may have more than `48,042` withdrawn pieces or more than `82,090` pieces that were not distributed. The withdrawn quantities of all batches must add up to exactly `209,908`, the not distributed quantities to exactly `134,543`, and the total for destruction to exactly `344,451`. These values can be changed in the configuration or on the command line.
+
+## The reference Excel file
+
+The program looks for an Excel file (.xlsx or .xlsm) in the folder FOLDER and in all of its subfolders. It uses the first file that has a column whose title contains `no distribuida`. A file can also be given with the option `--excel`. In this file the program finds three columns: the column with the batch numbers, the column with the not distributed quantity, and the column whose title contains `retirado`, which is the withdrawn quantity according to the customers. Other columns, such as the total for destruction, are ignored.
+
+The not distributed quantity of each batch is taken from this file, not from PDF documents. The withdrawn quantity is still calculated from the PDF documents, and the result for each batch is compared with the withdrawn quantity in the Excel file. This comparison shows exactly which batch does not match and which PDF documents contribute to it.
+
+A batch number that appears in a PDF document but not in the Excel file is not counted, because it is almost always a batch number that was read wrongly. These quantities are listed in the review file. If the Excel file contains formulas, it must have been saved by Excel, so that the calculated values are stored in the file.
 
 When a PDF contains text, the program reads the text directly. When a page contains no text, the program treats the page as a scanned image and reads it with optical character recognition (OCR). If no OCR engine is installed, the program does not read scanned PDFs and lists them for manual review.
 
@@ -61,21 +69,26 @@ Every quantity is marked as verified or not verified. A quantity is verified whe
 
 If a table contradicts its own printed total of pieces, and exactly one row is not verified, the program calculates the correct value of that row from the printed total. It uses the corrected value only if the printed total price confirms it. Otherwise, the PDF is marked as bad.
 
-A batch that appears several times in the same PDF is counted once when the quantity is the same. This happens, for example, when a PDF contains the same document twice. A page whose quantity is the sum of the other pages is not counted. If the same batch appears on several pages with different quantities, the quantities are added, and the PDF is listed for review.
+Two pages of the same PDF that contain exactly the same batch numbers are treated as the same document, for example a return form and its detailed list, or the same receipt printed twice. Only one of the two pages is counted. The program prefers the page whose sum matches its own printed total. If the two pages do not agree for a batch, the program uses the copy that matches the reference Excel file.
+
+A batch that appears on several other pages of the same PDF is counted once when the quantity is the same. A page whose quantity is the sum of the other pages is not counted. If the same batch appears on several pages with different quantities, the quantities are added, and the PDF is listed for review. Several rows of the same batch on the same page are always added, because they are separate lines of the document, for example different invoices.
 
 If a batch exceeds its limit, does not match the withdrawal report, or the total does not match the expected total, the program reads the doubtful scanned PDFs a second time with a higher resolution and more contrast. Then it tries to explain each difference exactly and without ambiguity:
 
 - If the other reading of exactly one PDF makes the batch match, that reading is used.
 - If a row in one PDF is an exact copy of a row in another PDF, and the batch matches when the copy is removed, the copy is not counted.
-- If the other reading of exactly one PDF, or the removal of exactly one copied row, makes the total exactly equal to the expected total, this change is applied.
+- If a quantity has a batch number that is not in the reference Excel file, differs from a batch in the Excel file by one digit or by two swapped digits, and makes that batch match exactly, the batch number is corrected.
+- If a pen stroke or check mark next to a number was read as an extra digit 1, 7 or 4, and removing it makes the batch match exactly, the number is corrected.
+- If the other reading of exactly one PDF, or the removal of exactly one copied row, makes the withdrawn total exactly equal to its expected total, this change is applied.
 
 A PDF is marked as bad only when the proof is conclusive: when its own numbers contradict its own printed totals in every reading, or when it contains an exact copy that is proven by a batch or by the expected total. All other doubts are listed as suspicious and are not changed.
 
 ## Rules for every value
 
-- A batch number has exactly eight digits and starts with `24`, `25` or `26`. The program ignores all other numbers, for example prices, dates, invoice numbers and product codes. If the OCR attaches other characters to a batch number, such as a vertical bar, the program removes them.
+- A batch number has exactly eight digits and starts with `25` or `26`. The program ignores all other numbers, for example prices, dates, invoice numbers and product codes. If the OCR attaches other characters to a batch number, such as a vertical bar, the program removes them. If the OCR splits a handwritten batch number in two, the parts are joined again.
 - The program reads numbers in Mexican notation. A comma separates the thousands and a point separates the decimals. For example, `1,250` is one thousand two hundred and fifty, and `1,250.50` is one thousand two hundred and fifty and a half. A number such as `4.408`, where the OCR read the comma as a point, is read as `4,408`, because pieces are always whole numbers.
-- Handwritten check marks next to a number, such as `695 ✓`, are ignored.
+- Handwritten check marks and strokes next to a number, such as `695 ✓` or `/ 630`, are ignored.
+- A column whose title names a reason, a code, a folio or an invoice is not used as the quantity, and neither is a column with the same value in every row.
 - The program skips every file whose name contains `FALTA REVISION`. The program ignores the difference between upper case and lower case, and the O may have an accent. Skipped files do not count towards any total.
 
 ## Options
@@ -83,6 +96,9 @@ A PDF is marked as bad only when the proof is conclusive: when its own numbers c
 Options of lotes_auto.py:
 
 - `FOLDER` is the folder that contains the PDF files. Subfolders are included.
+- `--excel PATH` uses this reference Excel file instead of searching the folder.
+- `--retirado-esperado N` sets the expected total of withdrawn pieces. The default value is `209,908`. The value 0 switches the check off.
+- `--no-distribuida-esperada N` sets the expected total of pieces that were not distributed. The default value is `134,543`. The value 0 switches the check off.
 - `--total-esperado N` sets the expected total for destruction. The default value is `344,451`. The value 0 switches the check off.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
@@ -99,11 +115,13 @@ Options of diagnostico.py:
 
 lotes_auto.py writes the following files into the folder FOLDER. It replaces existing files with the same names.
 
-`totales_lotes.xlsx` contains the result on one sheet with the name `Lotes`. The sheet contains three tables side by side: `Cantidad de producto retirado`, `Cantidad no distribuida` and `Cantidad total para destrucción`. Each table has the columns `Lote` and `Cantidad en Piezas` and a row `TOTAL`. All three tables list the same batches in the same order, so a row can be read across the tables. The third table and the totals are formulas, so they are updated when you change a number by hand. Below the third table, the sheet shows the expected total and the difference. Cells of batches that exceed a limit or do not match the withdrawal report are red.
+`totales_lotes.xlsx` contains the result on one sheet with the name `Lotes`. The sheet contains three tables side by side: `Cantidad de producto retirado`, `Cantidad no distribuida` and `Cantidad total para destrucción`. Each table has the columns `Lote` and `Cantidad en Piezas` and a row `TOTAL`. All three tables list the same batches in the same order, so a row can be read across the tables. The third table and the totals are formulas, so they are updated when you change a number by hand. Below each table, the sheet shows the expected total and the difference. Cells of batches that exceed a limit or do not match the withdrawal report are red.
 
 `detalle_lotes.txt` lists, for every batch, each quantity that was found, the PDF and page that contain it, whether it is verified and why, and whether it was counted. It also shows the values of the withdrawal report. Use this file to find the source of a total that looks wrong.
 
-`revisar_a_mano.txt` lists everything that needs a person: a summary with the totals and the expected total, the PDFs that are marked as bad and why, the corrections that were applied, the batches that exceed a limit or do not match the withdrawal report together with their PDFs, the suspicious PDFs, the batches that are repeated within a PDF, the batches that appear with the same quantity in several PDFs, the PDFs without readable quantities, and the files that were skipped because of `FALTA REVISION`.
+`revisar_a_mano.txt` lists everything that needs a person, in numbered sections: a summary with the three totals and their expected values; a list of actions in the order in which they should be done; the batches that do not match, with every quantity that was found for them, the PDFs without readable quantities that mention them, the skipped `FALTA REVISION` files that mention them, and a note when such a file contains exactly the missing quantity; the batches of the Excel file without any PDF; the quantities whose batch number is not in the Excel file, with the most similar batch of the Excel file; for every PDF without readable quantities, the number of pages, the OCR confidence, the reason, the batches that were seen, the numbers that might be misread batch numbers, the first lines of text and what to do; the PDFs that are marked as bad; the corrections; the suspicious PDFs; the repetitions within a PDF; the same batch and quantity in several PDFs; the skipped files with their quantities for information; and a list of all PDFs with their result.
+
+The files whose name contains `FALTA REVISION` are read only to report what they contain. They never count towards a total.
 
 `sin_resultado.log` contains, for every PDF that produced no quantity, the reason, the complete text that the program read from it and the decisions that the program made. Look at this file first when a PDF is not read correctly.
 
@@ -128,9 +146,11 @@ At the end, the program shows the three totals and compares the total for destru
 
 The settings are at the beginning of the file lotes_auto.py. You can change them with any text editor. Save the file in the UTF-8 encoding.
 
-`TOTAL_ESPERADO` is the expected total for destruction. The default value is `344451`. The value `None` switches the check off.
+`TOTAL_ESPERADO`, `TOTAL_RETIRADO_ESPERADO` and `TOTAL_NO_DISTRIBUIDA_ESPERADO` are the expected totals for destruction, for withdrawn pieces and for pieces that were not distributed. The default values are `344451`, `209908` and `134543`. The value `None` switches a check off.
 
-`MAX_RETIRADO_POR_LOTE` and `MAX_NO_DISTRIBUIDA_POR_LOTE` are the limits for each batch. The default values are `48042` and `82090`.
+`MAX_RETIRADO_POR_LOTE` and `MAX_NO_DISTRIBUIDA_POR_LOTE` are the limits for a single batch. They are not limits for the sum of a table. The default values are `48042` and `82090`.
+
+`EXCEL_REFERENCIA` is the path of the reference Excel file. The default value `None` means that the file is searched in the folder and its subfolders. `SOLO_LOTES_DEL_EXCEL` decides whether quantities with a batch number that is not in the Excel file are left out. The default value is `True`.
 
 `USAR_REPORTE_PARA_RETIRADO` decides how the withdrawn quantities of a withdrawal report are used. With the default value `False`, they are only used to check the return documents. With `True`, they are also used for batches that have no return document in the folder.
 
@@ -138,7 +158,7 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 
 `OMITIR_NOMBRE` is the pattern for the names of files that are skipped. The default value matches `FALTA REVISION`.
 
-`LOTE_ID` is the pattern for a valid batch number. The default value accepts exactly eight digits that start with `24`, `25` or `26`. For example, to also accept batch numbers that start with `27`, change `2[456]` to `2[4567]`.
+`LOTE_ID` is the pattern for a valid batch number. The default value accepts exactly eight digits that start with `25` or `26`. For example, to also accept batch numbers that start with `24`, change `2[56]` to `2[456]`.
 
 `OCR_DPI` and `OCR_DPI_REINTENTO` are the resolutions of the first and the second OCR reading. `CONFIANZA_MINIMA` is the OCR confidence below which a quantity that is not verified is listed as suspicious.
 

@@ -4,60 +4,88 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 ## Name
 
-lotes_auto.py - Berechnen Sie die Gesamtzahl der Teile für jede Chargennummer in einem Ordner mit PDF-Dokumenten
+lotes_auto.py - Berechnen Sie für jede Chargennummer die Stücke, die zurückgezogen wurden, die Stücke, die nicht verteilt wurden und die Gesamtzahl der Stücke zur Zerstörung
 
 diagnostico.py - zeigen, was lotes_auto.py in einem oder mehreren PDF-Dokumenten liest und erkennt
 
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] PATH
+python lotes_auto.py [-h] [--version] [--total-esperado N] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 ```
 
 ## Beschreibung
 
-lotes_auto.py sucht den Ordner FOLDER und alle seine Unterordner nach Dateien, deren Name in .pdf endet. In jedem PDF findet es jede Chargennummer und die Anzahl der Stücke, die das Dokument für diese Charge aufzeichnet. Es berechnet dann die Gesamtzahl der Teile jeder Charge über alle Dokumente und schreibt eine Zeile pro Charge in eine Excel-Arbeitsmappe. Wenn eine Charge in mehreren Dokumenten oder mehrmals in einem Dokument erscheint, werden ihre Mengen addiert.
+lotes_auto.py liest alle PDF-Dateien im Ordner FOLDER und in allen Unterordnern. In den Dokumenten geht es um einen Produktrückruf: Rückgabeformulare, Lieferbelege, Warenbelege, Inventarlisten und Rückrufberichte. Für jede Chargennummer berechnet das Programm drei Mengen:
+
+- Die zurückgenommene Menge (`Cantidad de producto retirado`). Dies sind die Stücke, die vom Markt zurückgegeben oder zurückgewonnen wurden. Sie stammen aus Rückgabeformularen, Lieferquittungen und Warenquittungen.
+- Die nicht verteilte Menge (`Cantidad no distribuida`). Dies sind die Stücke, die noch im Bestand sind und nie verteilt wurden. Sie stammen aus Inventardokumenten. Wenn eine Charge kein Inventardokument hat, wird die Menge dem Rückrufbericht entnommen.
+- Die Gesamtmenge für die Zerstörung (`Cantidad total para destrucción`). Dies ist die Summe der beiden anderen Mengen.
+
+Das Programm überprüft dann das Ergebnis. Eine Charge darf nicht mehr als `48,042`-Stücke zurückgenommen haben oder mehr als `82,090`-Stücke, die nicht verteilt wurden. Die Gesamtmenge zur Zerstörung aller Chargen muss genau `344,451` betragen. Diese Grenzen können in der Konfiguration geändert werden.
 
 Wenn ein PDF Text enthält, liest das Programm den Text direkt. Wenn eine Seite keinen Text enthält, behandelt das Programm die Seite als gescanntes Bild und liest es mit optischer Zeichenerkennung (OCR). Wenn keine OCR-Engine installiert ist, liest das Programm keine gescannten PDFs und listet sie zur manuellen Überprüfung auf.
 
 Das Programm wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Alle Nachrichten und Ausgabedateien sind in Spanisch. Dieses Handbuch erklärt ihre Bedeutung.
 
-diagnostico.py verwendet genau den gleichen Code wie lotes_auto.py, um Dokumente zu lesen und zu analysieren. Es zeigt den Text, den es aus jedem PDF gelesen hat, was es in diesem Text erkannt hat, und das Ergebnis. Verwenden Sie es, um ein PDF zu untersuchen, das nicht richtig gelesen wird. Es schreibt keine Dateien.
+diagnostico.py verwendet genau den gleichen Code wie lotes_auto.py, um Dokumente zu lesen und zu analysieren. Es zeigt den Text, den es aus jedem PDF gelesen hat, die Entscheidungen, die es getroffen hat und das Ergebnis. Verwenden Sie es, um ein PDF zu untersuchen, das nicht richtig gelesen wird. Es schreibt keine Dateien.
 
-## Unterstützte Layouts
+## Wie das Programm die Mengen findet
 
-Das Programm erkennt vier Layouts. Es untersucht jede Seite in der hier angegebenen Reihenfolge und verwendet das erste Layout, das Ergebnisse für diese Seite erzeugt.
+Das Programm verlässt sich nicht nur auf die Wörter in den Dokumenten. Es untersucht die Struktur jeder Tabelle und verwendet Arithmetik, um zu entscheiden, welche Zahl welche ist.
 
-1. Formulare, in denen jede Spalte ein Erzeugnis beschreibt. Eine Zeile hat eine Chargenbezeichnung wie `Lote` und enthält eine Chargennummer pro Spalte. Andere Zeilen haben eine Mengenbezeichnung wie `Cantidad Recibida` oder `Cantidad Facturada` und enthalten die Menge jedes Produkts in derselben Spalte. Wenn es mehrere Mengenreihen gibt, wählt das Programm eine nach der Priorität, die im Abschnitt Konfiguration beschrieben ist.
+Zuerst findet das Programm die Zeilen, die eine Chargennummer enthalten. Aus den Positionen der Werte in diesen Zeilen werden die Spalten der Tabelle gebildet. Jeder Wert wird als Chargennummer, Datum, Geldbetrag, ganze Zahl, Code oder Text klassifiziert.
 
-2. Tabellen mit Spaltentiteln. Ein Spaltentitel wie `CANTIDAD`, `PIEZAS` oder `No. de piezas` markiert die Zahlenspalte, und das Programm liest die Werte darunter. Das Programm nimmt die Chargennummer aus einer Spalte mit einem Titel wie `LOTE`. Wenn es keine solche Spalte gibt, nimmt sie die Chargennummer von einer anderen Stelle in derselben Zeile, beispielsweise aus der Beschreibung oder aus den nächsten beiden Zeilen. Ein Spaltentitel, der auf zwei Zeilen geschrieben ist, z. B. `PIEZAS` über `DEVUELTAS`, wird als ein Titel gelesen.
+Dann entscheidet das Programm, welche Spalte die Anzahl der Stücke enthält. Es werden nur Spalten mit ganzen Zahlen betrachtet. Zeilennummern, Codes, die sich in jeder Zeile und in jedem Jahr wiederholen, sind ausgeschlossen. Folgende Beweise werden verwendet, vom stärksten bis zum schwächsten:
 
-3. Textzeilen mit Beschriftungen, in denen die Charge an erster Stelle steht. Ein Beispiel ist eine Zeile `LOTE: 25240310` gefolgt von einer Zeile `CANTIDAD EN PIEZAS: 1,250`. Das Programm koppelt jede Charge mit der ersten Menge, die darauf folgt.
+1. Die mit dem Stückpreis multiplizierten Stücke entsprechen dem Betrag in derselben Zeile. Zum Beispiel ist `4,408` multipliziert mit `$27.00` `$119,016.00`.
+2. Die Summe der Spalte entspricht einer Zahl, die an anderer Stelle im Dokument gedruckt wird, beispielsweise `TOTAL DE PIEZAS 6,889` oder `No CAJAS / PIEZAS 1978`.
+3. Titel der Spalte. Titel wie `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` oder `DEVUELTAS` zählen dafür. Titel wie `FACTURADA` oder `DISTRIBUIDA` zählen dagegen, weil sie die ursprüngliche Menge und nicht die zurückgegebene Menge beschreiben. Titel mit `CAJAS` zählen dagegen, weil sie Boxen und nicht Stücke zählen.
 
-4. Textzeilen mit Etiketten, in denen die Menge an erster Stelle steht. Das Programm koppelt jede Menge mit der ersten Charge, die darauf folgt. Das erste Label im Dokument entscheidet, ob das Dokument Layout 3 oder Layout 4 verwendet.
+Ein Rückrufbericht wird allein durch Arithmetik erkannt. In einem Rückrufbericht enthält jede Zeile fünf Zahlen für eine Charge und zwei Relationen in jeder Zeile:
 
-Diese Wörter werden als Chargenbezeichnungen erkannt: `lote`, `serie`, `serial`, `n/s` und `s/n`. Sie können mit `No.`, `Num.` oder `Numero` kombiniert werden.
+- fabriziert minus verteilt gleich nicht verteilt;
+- nicht verteilt plus zurückgezogen entspricht der Gesamtsumme für die Zerstörung.
 
-Diese Wörter werden als Mengenetiketten erkannt: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.` und `uds`.
+Das Programm findet die Spalten, die diese Beziehungen erfüllen, so dass die Spaltentitel nicht benötigt werden. Die zurückgezogene Spalte ist diejenige, die niemals größer ist als die verteilte Spalte. Wenn eine Zeile des Berichts die Relationen nicht erfüllt, z. B. weil die OCR eine Ziffer falsch gelesen hat, verwendet das Programm die Relationen, um den richtigen Wert wiederherzustellen.
 
-Diese Wörter werden auch als Zahlenspaltentitel erkannt: `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` und `viales`.
+Die Art jeder Menge wird wie folgt festgelegt. Eine Größe wird nicht verteilt, wenn ihr Spaltentitel oder Zeilentitel dies sagt, zum Beispiel `EXISTENCIA`, `INVENTARIO` oder `NO DISTRIBUIDO`. Ansonsten entscheiden die Worte der ganzen Seite: Seiten über Rückgaben, Auszahlungen oder Quittungen geben zurückgezogene Mengen an, und Seiten über Inventar geben keine verteilten Mengen an. Wenn eine Seite keinen eindeutigen Typ hat, wird der Typ der anderen Seiten derselben PDF verwendet. Wenn das PDF keinen eindeutigen Typ hat, zählt die Menge als zurückgezogen und eine Notiz wird hinzugefügt.
 
-Das Wort `unidad` allein markiert keine Menge, weil es die Maßeinheit benennt. Das Wort `cajas` wird nie verwendet, weil es Boxen und nicht Stücke zählt.
+Das Programm liest auch zwei andere Layouts:
+
+- Formulare, in denen jede Spalte ein Erzeugnis beschreibt. Eine Zeile enthält die Chargennummern und andere Zeilen enthalten Mengen wie `Cantidad Recibida` oder `Cantidad Facturada`. Die Zeile wird durch die Priorität ausgewählt, die im Abschnitt Konfiguration beschrieben wird.
+- Textzeilen mit Beschriftungen wie einer Zeile `LOTE: 25240310` und einer Zeile `CANTIDAD EN PIEZAS: 1,250`.
+
+## Kontrollen und Berichtigungen
+
+Jede Menge wird als überprüft oder nicht überprüft gekennzeichnet. Eine Menge wird überprüft, wenn die mit dem Preis multiplizierten Stücke dem gedruckten Betrag entsprechen, wenn die Summe ihrer Tabelle einer gedruckten Summe entspricht oder wenn die Summe ihrer Charge dem Rückrufbericht entspricht.
+
+Wenn eine Tabelle ihrer eigenen gedruckten Stückzahl widerspricht und genau eine Zeile nicht verifiziert wird, berechnet das Programm aus der gedruckten Summe den richtigen Wert dieser Zeile. Es verwendet den korrigierten Wert nur, wenn der gedruckte Geldbetrag dies bestätigt. Ansonsten wird das PDF als schlecht markiert.
+
+Ein Charge, der mehrmals im gleichen PDF erscheint, wird einmal gezählt, wenn die Menge gleich ist. Dies geschieht beispielsweise, wenn ein PDF das gleiche Dokument zweimal enthält. Eine Seite, deren Menge die Summe der anderen Seiten ist, wird nicht gezählt. Wenn der gleiche Charge auf mehreren Seiten mit unterschiedlichen Mengen erscheint, werden die Mengen hinzugefügt und das PDF zur Überprüfung aufgelistet.
+
+Wenn ein Charge seine Grenze überschreitet, nicht mit dem Rückrufbericht übereinstimmt oder die Summe nicht mit der erwarteten Summe übereinstimmt, liest das Programm die zweifelhaft gescannten PDFs ein zweites Mal mit einer höheren Auflösung und mehr Kontrast. Dann versucht es, jeden Unterschied genau und ohne Zweideutigkeit zu erklären:
+
+- Wenn die andere Lektüre von genau einem PDF die Charge-Match macht, wird diese Lektüre verwendet.
+- Wenn eine Zeile in einem PDF eine exakte Kopie einer Zeile in einem anderen PDF ist und die Charge beim Entfernen der Kopie übereinstimmt, wird die Kopie nicht gezählt.
+- Wenn das andere Lesen von genau einem PDF oder das Entfernen von genau einer kopierten Zeile die Gesamtsumme genau der erwarteten Gesamtsumme entspricht, wird diese Änderung angewendet.
+
+Ein PDF wird nur dann als schlecht markiert, wenn der Beweis schlüssig ist: wenn seine eigenen Zahlen in jeder Lesung seinen eigenen gedruckten Gesamtwerten widersprechen oder wenn es eine genaue Kopie enthält, die durch eine Charge oder durch die erwartete Gesamtsumme bewiesen wird. Alle anderen Zweifel werden als verdächtig aufgeführt und nicht verändert.
 
 ## Regeln für jeden Wert
 
-- Eine Chargennummer hat genau acht Stellen und beginnt mit `24`, `25` oder `26`. Das Programm ignoriert alle anderen Zahlen, zum Beispiel Preise, Beträge, Daten und Produktcodes. Wenn die OCR andere Zeichen an eine Chargennummer anhängt, z. B. einen vertikalen Balken, entfernt das Programm sie.
-- Das Programm liest Zahlen in mexikanischer Notation. Ein Komma trennt die Tausende und ein Punkt trennt die Dezimalzahlen. Zum Beispiel ist `1,250` eintausendzweihundertfünfzig, und `1,250.50` ist eintausendzweihundertfünfzigeinhalb.
-- Das Programm ignoriert Mengen, die Dezimalzahlen haben, und Mengen, die Null oder negativ sind, weil eine Anzahl von Stücken immer eine ganze Zahl ist. Diese Regel verhindert auch, dass Preise als Stücke gezählt werden.
+- Eine Chargennummer hat genau acht Stellen und beginnt mit `24`, `25` oder `26`. Das Programm ignoriert alle anderen Zahlen, zum Beispiel Preise, Beträge, Daten, Rechnungsnummern und Produktcodes. Wenn die OCR andere Zeichen an eine Chargennummer anhängt, z. B. einen vertikalen Balken, entfernt das Programm sie.
+- Das Programm liest Zahlen in mexikanischer Notation. Ein Komma trennt die Tausende und ein Punkt trennt die Dezimalzahlen. Zum Beispiel ist `1,250` eintausendzweihundertfünfzig, und `1,250.50` ist eintausendzweihundertfünfzigeinhalb. Eine Zahl wie `4.408`, bei der die OCR das Komma als Punkt liest, wird als `4,408` gelesen, da Stücke immer ganze Zahlen sind.
+- Handschriftliche Häkchen neben einer Zahl, wie `695 ✓`, werden ignoriert.
 - Das Programm überspringt jede Datei, deren Name `FALTA REVISION` enthält. Das Programm ignoriert den Unterschied zwischen Großbuchstaben und Kleinbuchstaben, und das O kann einen Akzent haben. Übersprungene Dateien zählen nicht zu einer Gesamtsumme.
-- Wenn eine einzelne Menge größer als `50,000` ist, fügt das Programm sie immer noch zur Summe hinzu. Wenn das Programm beendet ist, meldet es solche Mengen als verdächtig.
 
 ## Optionen
 
 Optionen von lotes_auto.py:
 
 - `FOLDER` ist der Ordner, der die PDF-Dateien enthält. Unterordner sind enthalten.
+- `--total-esperado N` legt die erwartete Gesamtmenge für die Zerstörung fest. Der Standardwert ist `344,451`. Der Wert 0 schaltet den Check ab.
 - `--version` zeigt die Versionsnummer an. Das Programm stoppt dann.
 - `-h` oder `--help` zeigt einen kurzen Hilfetext. Das Programm stoppt dann.
 
@@ -65,37 +93,36 @@ Optionen von diagnostico.py:
 
 - `PATH` ist eine einzelne PDF-Datei oder ein Ordner. Wenn es sich um einen Ordner handelt, untersucht das Programm alle darin enthaltenen PDF-Dateien.
 - `--lineas N` zeigt nicht mehr als N Textzeilen für jedes PDF. Der Standardwert ist 40.
+- `--segunda-lectura` verwendet den zweiten OCR-Messwert mit einer höheren Auflösung und mehr Kontrast.
 - `--version` zeigt die Versionsnummer an. Das Programm stoppt dann.
 - `-h` oder `--help` zeigt einen kurzen Hilfetext. Das Programm stoppt dann.
 
 ## Ausgabedateien
 
-lotes_auto.py schreibt die folgenden Dateien in den Ordner FOLDER. Es ersetzt bestehende Dateien mit den gleichen Namen. Wenn eine Datei leer wäre, löscht das Programm sie stattdessen.
+lotes_auto.py schreibt die folgenden Dateien in den Ordner FOLDER. Es ersetzt bestehende Dateien mit den gleichen Namen.
 
-`totales_lotes.xlsx` enthält das Ergebnis. Es hat ein Blatt mit dem Namen `Lotes`. Das Blatt hat zwei Spalten, `Lote` und `Cantidad en Piezas`, und eine Zeile für jede Charge. Die Zeilen werden nach Chargennummer sortiert. Die Mengen werden als Zahlen gespeichert und mit Zifferngruppierung, beispielsweise `1,406`, dargestellt.
+`totales_lotes.xlsx` enthält das Ergebnis auf einem Blatt mit dem Namen `Lotes`. Das Blatt enthält drei Tabellen nebeneinander: `Cantidad de producto retirado`, `Cantidad no distribuida` und `Cantidad total para destrucción`. Jede Tabelle hat die Spalten `Lote` und `Cantidad en Piezas` und eine Zeile `TOTAL`. Alle drei Tabellen listen die gleichen Chargen in der gleichen Reihenfolge auf, so dass eine Zeile über die Tabellen gelesen werden kann. Die dritte Tabelle und die Summen sind Formeln, so dass sie aktualisiert werden, wenn Sie eine Zahl von Hand ändern. Unterhalb der dritten Tabelle zeigt das Blatt die erwartete Summe und die Differenz. Zellen von Chargen, die einen Grenzwert überschreiten oder nicht mit dem Rückrufbericht übereinstimmen, sind rot.
 
-`detalle_lotes.txt` listet jeden Betrag auf, der zu jeder Charge hinzugefügt wurde, zusammen mit dem Namen des PDF, das den Betrag enthält. Verwenden Sie diese Datei, um die Quelle einer Summe zu finden, die falsch aussieht.
+`detalle_lotes.txt` listet für jede Charge, jede gefundene Menge, das PDF und die Seite auf, die es enthalten, ob es verifiziert ist und warum und ob es gezählt wurde. Es zeigt auch die Werte des Rückrufberichts. Verwenden Sie diese Datei, um die Quelle einer Summe zu finden, die falsch aussieht.
 
-`revisar_a_mano.txt` hat zwei Abschnitte. Der erste Abschnitt listet die Dateien auf, die übersprungen wurden, weil ihr Name `FALTA REVISION` enthält. Der zweite Abschnitt listet die PDFs auf, aus denen keine Menge gelesen werden konnte, jeweils mit dem Grund. Die möglichen Gründe sind: keine lesbaren Mengen; ein gescanntes PDF und keine OCR-Engine; ein Fehler beim Lesen der Datei.
+`revisar_a_mano.txt` listet alles auf, was eine Person braucht: eine Zusammenfassung mit den Summen und der erwarteten Summe, die PDFs, die als schlecht markiert sind und warum, die Korrekturen, die angewendet wurden, die Chargen, die eine Grenze überschreiten oder nicht mit dem Rückrufbericht zusammen mit ihren PDFs übereinstimmen, die verdächtigen PDFs, die Chargen, die innerhalb einer PDF wiederholt werden, die Chargen, die mit der gleichen Menge in mehreren PDFs erscheinen, die PDFs ohne lesbare Mengen und die Dateien, die wegen `FALTA REVISION` übersprungen wurden.
 
-`sin_resultado.log` enthält für jedes PDF, das keine Menge produziert hat, den Grund und den vollständigen Text, den das Programm daraus gelesen hat. Schauen Sie sich diese Datei zuerst an, wenn ein PDF nicht richtig gelesen wird.
+`sin_resultado.log` enthält für jedes PDF, das keine Menge produziert hat, den Grund, den vollständigen Text, den das Programm daraus gelesen hat, und die Entscheidungen, die das Programm getroffen hat. Schauen Sie sich diese Datei zuerst an, wenn ein PDF nicht richtig gelesen wird.
 
 ## Konsolennachrichten
 
-Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text nach dem Pfeil hat folgende Bedeutung:
+Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text hinter dem Pfeil sagt, wie viele zurückgezogene und nicht verteilte Mengen gelesen wurden, ob das PDF ein Rückrufbericht ist und ob der Text direkt (`texto`) oder mit OCR (`OCR`) gelesen wurde. Weitere Meldungen:
 
-- `-> N cantidades (texto)` bedeutet, dass das Programm N Mengen aus einem PDF liest, das Text enthält.
-- `-> N cantidades (OCR)` bedeutet, dass das Programm N Mengen aus einem gescannten PDF gelesen hat.
-- `-> 0 cantidades` bedeutet, dass das Programm keine Menge gelesen hat. Die Datei sin_resultado.log zeigt den Text, den sie gelesen hat.
 - `-> omitido (FALTA REVISION)` bedeutet, dass das Programm die Datei aufgrund ihres Namens übersprungen hat.
 - `-> escaneado, OCR no disponible` bedeutet, dass das PDF gescannt wird und keine OCR-Engine installiert ist.
 - `-> ERROR` bedeutet, dass das Programm die Datei nicht öffnen oder lesen konnte.
+- `Segunda lectura` bedeutet, dass das Programm zweifelhaft gescannte PDFs ein zweites Mal liest.
 
-Am Ende zeigt das Programm die Anzahl der Chargen und Mengen und die Namen der Dateien, die es geschrieben hat. Wenn eine einzelne Menge größer als `50,000` ist, zeigt sie auch eine Liste dieser Mengen unter dem Titel `cantidades sospechosamente grandes` an.
+Am Ende zeigt das Programm die drei Summen und vergleicht die Summe für die Zerstörung mit der erwarteten Summe. Das Wort `COINCIDE` bedeutet, dass die Summen gleich sind. Ansonsten wird der Unterschied gezeigt. Dann listet es die PDFs auf, die als schlecht markiert sind.
 
 ## Rückgabewerte des Programms
 
-- `0` bedeutet, dass das Programm erfolgreich abgeschlossen wurde.
+- `0` bedeutet, dass das Programm beendet ist. Überprüfen Sie die Zusammenfassung, um zu sehen, ob die Summen übereinstimmen.
 - `1` bedeutet, dass das Programm die Excel-Datei nicht schreiben konnte. Normalerweise ist die Datei in Excel geöffnet.
 - `2` bedeutet, dass die Argumente nicht gültig sind oder dass der Ordner nicht existiert.
 
@@ -103,15 +130,23 @@ Am Ende zeigt das Programm die Anzahl der Chargen und Mengen und die Namen der D
 
 Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können sie mit jedem Texteditor ändern. Speichern Sie die Datei in der UTF-8-Codierung.
 
-`LOTE_WORDS` und `CANT_WORDS` sind reguläre Ausdrücke. Sie enthalten die Wörter, die Chargennummern und -mengen markieren.
+`TOTAL_ESPERADO` ist die erwartete Gesamtmenge für die Zerstörung. Der Standardwert ist `344451`. Der Wert `None` schaltet den Check ab.
 
-`PRIORIDAD_CANTIDAD` entscheidet, welche Menge Spalte oder Zeile verwendet wird, wenn ein Dokument mehrere hat. Das Programm verwendet das erste Wort in dieser Liste, das in einem Spaltentitel erscheint. Die Standardliste lautet `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Dies bedeutet, dass eine Spalte über Stücke oder über zurückgegebene Ware bevorzugt wird und dass eine fakturierte Menge nur verwendet wird, wenn keine andere Menge existiert.
+`MAX_RETIRADO_POR_LOTE` und `MAX_NO_DISTRIBUIDA_POR_LOTE` sind die Grenzwerte für jede Charge. Die Standardwerte sind `48042` und `82090`.
 
-`AVISO_CANTIDAD_GRANDE` ist der Grenzwert, oberhalb dessen eine einzelne Menge als verdächtig gemeldet wird. Der Standardwert ist `50000`.
+`USAR_REPORTE_PARA_RETIRADO` entscheidet, wie die zurückgezogenen Mengen eines Rückrufberichts verwendet werden. Mit dem Standardwert `False` werden sie nur zur Überprüfung der Rücksendedokumente verwendet. Mit `True` werden sie auch für Chargen verwendet, die kein Rückgabedokument im Ordner haben.
+
+`DUPLICADOS_EN_ARCHIVO` entscheidet, wie ein Charge, der im selben PDF wiederholt wird, gezählt wird. Mit dem Standardwert `iguales` wird er nur einmal gezählt, wenn die Mengen gleich sind. Mit `todos` wird es immer einmal gezählt und die größte Menge gehalten.
 
 `OMITIR_NOMBRE` ist das Muster für die Namen von Dateien, die übersprungen werden. Der Standardwert stimmt mit `FALTA REVISION` überein.
 
 `LOTE_ID` ist das Muster für eine gültige Chargennummer. Der Standardwert akzeptiert genau acht Ziffern, die mit `24`, `25` oder `26` beginnen. Um beispielsweise auch Chargennummern zu akzeptieren, die mit `27` beginnen, ändern Sie `2[456]` in `2[4567]`.
+
+`OCR_DPI` und `OCR_DPI_REINTENTO` sind die Auflösungen der ersten und zweiten OCR-Messung. `CONFIANZA_MINIMA` ist das OCR-Vertrauen, unterhalb dessen eine nicht verifizierte Menge als verdächtig aufgeführt wird.
+
+`PRIORIDAD_RENGLON` entscheidet, welche Mengenreihe in Formularen verwendet wird, in denen jede Spalte ein Produkt beschreibt.
+
+`SEMANTICA` und `TIPO_DOCUMENTO` enthalten die Wörter, die als ein Signal unter anderem verwendet werden, um Spaltentitel zu verstehen und den Typ einer Seite zu erkennen.
 
 ## Installation
 
@@ -286,13 +321,14 @@ Nach einer Änderung kann GitHub die vorherige Version für einige Minuten liefe
 
 Die Excel-Datei kann nicht gespeichert werden. Das Programm endet mit dem Rückgabecode 1, wenn totales_lotes.xlsx in Excel geöffnet ist. Schließen Sie die Datei und führen Sie das Programm erneut aus.
 
-Alle oder viele PDFs zeigen `0 cantidades`. Führen Sie diagnostico.py mit einem dieser PDFs aus. Wenn der angezeigte Text leer ist, wird das PDF gescannt und die OCR liest es nicht. Wenn der Text vorhanden ist, aber nichts erkannt wird, kennt das Programm die Beschriftungen oder das Layout des Dokuments nicht. Der Text zeigt, welche Wörter das Dokument verwendet. Der gleiche Text ist in sin_resultado.log. Sie können diese Wörter zur Konfiguration hinzufügen.
+Die Gesamtsumme entspricht nicht der erwarteten Gesamtsumme. Open revisar_a_mano.txt. Der Abschnitt über Chargen, die nicht übereinstimmen, zeigt, welche Chargen eine Grenze überschreiten oder vom Rückrufbericht abweichen und welche PDFs dazu beitragen. Suchen Sie dann nach diesen Chargen in detalle_lotes.txt. Häufige Ursachen sind:
 
-Eine Summe ist viel zu groß. Suchen Sie nach der Chargennummer in detalle_lotes.txt. Diese Datei zeigt jeden Betrag, der hinzugefügt wurde, und den Namen der PDF, die es enthält. Dies sind häufige Ursachen:
+- Ein PDF, das zum Rückruf gehört, fehlt im Ordner oder heißt `FALTA REVISION`.
+- Die OCR hat eine Ziffer falsch gelesen. Die beiden Lesungen eines PDF werden verglichen, und ein Unterschied zwischen ihnen wird als `dudosa` vermerkt.
+- Das gleiche Dokument befindet sich zweimal im Ordner unter verschiedenen Namen.
+- Das Programm verwendete die falsche Spalte für die Menge, da das Dokument ein Layout verwendet, das das Programm nicht kennt. Führen Sie diagnostico.py mit diesem PDF aus, um zu sehen, welche Spalte ausgewählt wurde und warum.
 
-- Das Programm verwendete die falsche Spalte für die Menge, da das Dokument einen Spaltentitel verwendet, den das Programm nicht kennt.
-- Die OCR verknüpfte zwei Zahlen, die nahe beieinander liegen, zu einer Zahl.
-- Das gleiche PDF befindet sich zweimal im Ordner.
+Alle oder viele PDFs zeigen keine Mengen an. Führen Sie diagnostico.py mit einem dieser PDFs aus. Wenn der angezeigte Text leer ist, wird das PDF gescannt und die OCR liest es nicht. Wenn der Text vorhanden ist, aber nichts erkannt wird, kennt das Programm das Layout des Dokuments nicht.
 
 Die OCR kann unter Windows nicht geladen werden, und die Nachricht enthält `DLL load failed`. Installieren Sie das Paket msvc-runtime wie in den Anweisungen für Windows gezeigt.
 
@@ -302,11 +338,11 @@ pip kann rapidocr_onnxruntime nicht installieren. Dieses Paket unterstützt Pyth
 
 ## Beschränkungen
 
-Die OCR liest handschriftliche Zahlen, wenn sie klar geschrieben sind. Es liest nicht zuverlässig Handschrift, die schwer zu lesen ist, Häkchen oder handschriftliche Abkürzungen wie `N/A`. PDFs mit Mengen, die nicht gelesen werden können, sind in revisar_a_mano.txt aufgeführt und müssen von einer Person überprüft werden.
+Die OCR liest handschriftliche Zahlen, wenn sie klar geschrieben sind. Es liest nicht zuverlässig Handschrift, die schwer zu lesen ist, oder handschriftliche Abkürzungen wie `N/A`. Mengen, die von Hand in ein Formular geschrieben werden, werden daher oft nicht gelesen. Diese PDFs sind in revisar_a_mano.txt aufgeführt und müssen von einer Person überprüft werden.
 
-Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan verschwommen oder gekippt ist. Vergleichen Sie einige Summen aus gescannten PDFs mit detalle_lotes.txt.
+Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan verschwommen ist. Mengen, die durch einen Preis, eine gedruckte Summe oder den Rückrufbericht verifiziert werden, sind zuverlässig. Mengen, die nicht verifiziert sind, sollten mit dem PDF verglichen werden.
 
-Das Format einer Chargennummer wird durch `LOTE_ID` festgelegt. Das Programm ignoriert Chargennummern in anderen Formaten, bis das Muster geändert wird.
+Die zweite OCR Lesung braucht Zeit. Wenn die Gesamtsumme nicht übereinstimmt, werden alle gescannten PDFs mit nicht verifizierten Mengen erneut gelesen, so dass ein Lauf etwa doppelt so lange dauern kann.
 
 Das Programm erwartet, dass Mengen ganze Stückzahlen sind. Es konvertiert keine Dokumente, die Boxen oder andere Einheiten zählen.
 

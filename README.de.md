@@ -4,11 +4,17 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals liest einen Ordner mit PDF-Dokumenten wie Rechnungen, Lieferscheinen und Formularen für zurückgegebene Produkte. Es findet jede Chargennummer und die Anzahl der Stücke, die für jede Charge aufgezeichnet wird. Es schreibt dann die Gesamtzahl der Stücke für jede Charge in eine Excel-Datei.
+pdf-totals liest einen Ordner mit PDF-Dokumenten über einen Produktrückruf, wie Rückgabeformulare, Lieferquittungen, Warenquittungen, Inventarlisten und Rückrufberichte. Für jede Chargennummer berechnet es drei Mengen und schreibt sie in eine Excel-Datei:
 
-Das Programm liest den Text von PDFs, die Text enthalten. Es liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es erkennt mehrere gängige Layouts: Tabellen mit einer Chargenspalte und einer Mengenspalte, Tabellen, in denen die Chargennummer Teil der Beschreibung ist, Formulare, in denen jede Spalte ein Produkt beschreibt, und Zeilen mit Etiketten wie `LOTE: 25240310` und `CANTIDAD: 1,250`.
+- die aus dem Markt genommene Menge: Stücke, die zurückgegeben oder vom Markt zurückgewonnen wurden;
+- die nicht verteilte Menge: noch im Bestand befindliche Stücke;
+- die Gesamtmenge für die Zerstörung: die Summe beider.
 
-Das Programm wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Eine Chargennummer muss genau acht Stellen haben und mit `24`, `25` oder `26` beginnen. Diese Regel ist leicht zu ändern.
+Das Programm verlässt sich nicht nur auf die Wörter in den Dokumenten. Es untersucht die Struktur jeder Tabelle: welche Spalte ganze Zahlen enthält, welche Spalte multipliziert mit dem Stückpreis den gedruckten Betrag ergibt und welche Spalte sich zu einer gedruckten Gesamtsumme addiert. In einem Rückrufbericht findet es die Spalten nach Arithmetik, weil fabriziert minus verteilt gleich nicht verteilt ist, und nicht verteilt plus zurückgezogen gleich der Summe.
+
+Das Programm überprüft dann das Ergebnis. Eine Charge darf `48,042`-Stücke oder `82,090`-Stücke, die nicht verteilt wurden, nicht überschreiten, und die Summe für die Zerstörung muss genau `344,451` sein. Wenn etwas nicht übereinstimmt, werden zweifelhafte gescannte PDFs ein zweites Mal gelesen, Differenzen werden nur dann korrigiert, wenn ein exakter Beweis vorliegt, und PDFs werden nur nach schlüssigen Beweisen als schlecht markiert.
+
+Das Programm liest den Text von PDFs, die Text enthalten, und liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Eine Chargennummer muss genau acht Stellen haben und mit `24`, `25` oder `26` beginnen. Diese Regeln sind leicht zu ändern.
 
 ## Anforderungen
 
@@ -58,9 +64,9 @@ macOS, Linux, FreeBSD, OpenBSD und NetBSD:
 
 Das Programm durchsucht auch alle Unterordner. Es überspringt jede Datei, deren Name `FALTA REVISION` enthält. Wenn das Programm beendet ist, enthält der Ordner diese Dateien:
 
-- totales_lotes.xlsx enthält eine Zeile für jede Charge mit der Gesamtzahl der Stücke.
-- detalle_lotes.txt listet jeden Betrag auf, der zu jeder Charge hinzugefügt wurde, und den Namen des PDF, das ihn enthält.
-- revisar_a_mano.txt listet die übersprungenen PDFs und die PDFs auf, von denen keine Menge gelesen werden konnte.
+- totales_lotes.xlsx enthält drei Tabellen nebeneinander auf einem Blatt: zurückgezogen, nicht verteilt und insgesamt zur Zerstörung, jeweils mit der Chargennummer und der Stückzahl.
+- detalle_lotes.txt listet jede Menge jeder Charge, das PDF, das sie enthält und ob sie verifiziert ist.
+- revisar_a_mano.txt listet die als schlecht markierten PDFs, die Korrekturen, die Chargen, die nicht übereinstimmen, die verdächtigen PDFs und die PDFs, aus denen keine Menge gelesen werden konnte.
 - sin_resultado.log enthält den Text, der aus jedem PDF gelesen wurde, das keine Menge produziert hat.
 
 Um zu sehen, was das Programm in einem PDF liest und erkennt, führen Sie diagnostico.py mit dem Pfad des PDF aus. diagnostico.py schreibt keine Dateien.

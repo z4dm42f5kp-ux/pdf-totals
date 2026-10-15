@@ -4,60 +4,88 @@ Este archivo fue traducido automáticamente del original inglés con Argos Trans
 
 ## Nombre
 
-lotes_auto.py - calcular el número total de piezas para cada número de lote en una carpeta de documentos PDF
+lotes_auto.py - calcular, para cada número de lote, las piezas que fueron retiradas, las piezas que no fueron distribuidas y el número total de piezas para la destrucción
 
 diagnostico.py - mostrar lo que lotes_auto.py lee y detecta en uno o más documentos PDF
 
 ## Sinopsis
 
 ```
-python lotes_auto.py [-h] [--version] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] PATH
+python lotes_auto.py [-h] [--version] [--total-esperado N] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 ```
 
 ## Descripción
 
-lotes_auto.py busca la carpeta FOLDER y todos sus subcarpetas para archivos cuyo nombre termina en .pdf. En cada PDF encuentra cada número de lotes y el número de piezas que el documento registra para ese lote. A continuación, calcula el número total de piezas de cada lote sobre todos los documentos y escribe una fila por lote a un libro de trabajo de Excel. Cuando un lote aparece en varios documentos, o varias veces en un solo documento, sus cantidades se agregan juntas.
+lotes_auto.py lee todos los archivos PDF en la carpeta FOLDER y en todos sus subcarpetas. Los documentos se refieren a un recuerdo del producto: formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote el programa calcula tres cantidades:
+
+- La cantidad retirada (`Cantidad de producto retirado`). Estas son las piezas que fueron devueltas o recuperadas del mercado. Vienen de formularios de devolución, recibos de entrega y recibos de bienes.
+- La cantidad no distribuida (`Cantidad no distribuida`). Estas son las piezas que todavía están en inventario y nunca fueron distribuidas. Vienen de documentos de inventario. Si un lote no tiene documento de inventario, la cantidad se extrae del informe de la memoria.
+- La cantidad total para la destrucción (`Cantidad total para destrucción`). Esta es la suma de las otras dos cantidades.
+
+El programa revisa el resultado. Un lote no debe tener más de piezas retiradas `48,042` o más de piezas `82,090` que no fueron distribuidas. La cantidad total para la destrucción de todos los lotes debe ser exactamente `344,451`. Estos límites se pueden cambiar en la configuración.
 
 Cuando un PDF contiene texto, el programa lee el texto directamente. Cuando una página no contiene texto, el programa trata la página como imagen escaneada y la lee con reconocimiento de caracteres ópticos (OCR). Si no se instala ningún motor OCR, el programa no lee PDFs escaneados y los enumera para revisión manual.
 
 El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Todos los mensajes y archivos de salida están en español. Este manual explica su significado.
 
-diagnostico.py utiliza exactamente el mismo código que lotes_auto.py para leer y analizar documentos. Muestra el texto que leía de cada PDF, lo que detectó en ese texto, y el resultado. Úsalo para examinar un PDF que no se lee correctamente. No escribe ningún archivo.
+diagnostico.py utiliza exactamente el mismo código que lotes_auto.py para leer y analizar documentos. Muestra el texto que leyó de cada PDF, las decisiones que tomó y el resultado. Úsalo para examinar un PDF que no se lee correctamente. No escribe ningún archivo.
 
-## Diseños compatibles
+## Cómo el programa encuentra las cantidades
 
-El programa reconoce cuatro diseños. Examina cada página en el orden dado aquí y utiliza el primer diseño que produce resultados para esa página.
+El programa no depende solamente de las palabras en los documentos. Examina la estructura de cada tabla y utiliza aritmética para decidir qué número es cuál.
 
-1. Formas en las que cada columna describe un producto. Una fila tiene una etiqueta de lote, como `Lote`, y contiene un número de lote por columna. Otras filas tienen una etiqueta de cantidad, como `Cantidad Recibida` o `Cantidad Facturada`, y contienen la cantidad de cada producto en la misma columna. Si hay varias filas de cantidad, el programa elige una por la prioridad que se describe en la sección Configuración.
+Primero, el programa encuentra las filas que contienen un número de lote. Las columnas de la tabla se forman de las posiciones de los valores en estas filas. Cada valor se clasifica como un número de lote, una fecha, una cantidad de dinero, un número entero, un código o texto.
 
-2. Tablas con títulos de columna. Un título de columna como `CANTIDAD`, `PIEZAS` o `No. de piezas` marca la columna de cantidad, y el programa lee los valores de abajo. El programa toma el número de lotes de una columna con un título como `LOTE`. Si no hay tal columna, toma el número de lote de cualquier otro lugar en la misma fila, por ejemplo de la descripción, o de las dos filas siguientes. Un título de columna que está escrito en dos líneas, como `PIEZAS` sobre `DEVUELTAS`, se lee como un título.
+Luego el programa decide qué columna contiene el número de piezas. Sólo se consideran columnas con números enteros. Números de filas, códigos que repiten en cada fila y años están excluidos. Se utilizan las siguientes pruebas, desde más fuerte hasta más débil:
 
-3. Líneas de texto con etiquetas, en las que el lote viene primero. Un ejemplo es una línea `LOTE: 25240310` seguida de una línea `CANTIDAD EN PIEZAS: 1,250`. El programa empareja cada lote con la primera cantidad que lo sigue.
+1. Cantidad multiplicada por el precio unitario igual a la cantidad en la misma fila. Por ejemplo, `4,408` multiplicado por `$27.00` es `$119,016.00`.
+2. La suma de la columna equivale a un número impreso en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
+3. El título de la columna. Títulos como `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` o `DEVUELTAS` cuentan a favor. Títulos como `FACTURADA` o `DISTRIBUIDA` cuentan con contra, porque describen la cantidad original y no la cantidad devuelta. Títulos con `CAJAS` cuentan contra, porque cuentan cajas y no piezas.
 
-4. Líneas de texto con etiquetas, en las que la cantidad viene primero. El programa empareja cada cantidad con el primer lote que lo sigue. La primera etiqueta del documento decide si el documento utiliza el diseño 3 o el diseño 4.
+Un informe de memoria es reconocido solo por aritmética. En un informe de memoria, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
 
-Estas palabras son reconocidas como etiquetas por lotes: `lote`, `serie`, `serial`, `n/s` y `s/n`. Pueden combinarse con `No.`, `Num.` o `Numero`.
+- fabricada menos distribuidas iguales no distribuidas;
+- no distribuido más retirado equivale al total para la destrucción.
 
-Estas palabras se reconocen como etiquetas de cantidad: `cantidad`, `cant.`, `piezas`, `pieza`, `pzas`, `pza`, `pzs`, `pz`, `unidades`, `unid.` y `uds`.
+El programa encuentra las columnas que cumplen estas relaciones, por lo que los títulos de columna no son necesarios. La columna retirada es la que nunca es más grande que la columna distribuida. Si una fila del informe no cumple las relaciones, por ejemplo porque el OCR lee un dígito erróneamente, el programa utiliza las relaciones para recuperar el valor correcto.
 
-Estas palabras también se reconocen como títulos de columna de cantidad: `devueltas`, `devuelto`, `frascos`, `ampolletas`, `ampulas` y `viales`.
+El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario, las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario dan cantidades no distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
 
-La palabra `unidad` por sí sola no marca una cantidad, porque nombra la unidad de medida. La palabra `cajas` nunca se utiliza, porque cuenta cajas y no piezas.
+El programa también lee otros dos diseños:
+
+- Formas en las que cada columna describe un producto. Una fila contiene los números de lote, y otras filas contienen cantidades como `Cantidad Recibida` o `Cantidad Facturada`. La fila es elegida por la prioridad que se describe en la sección Configuración.
+- Líneas de texto con etiquetas, como una línea `LOTE: 25240310` y una línea `CANTIDAD EN PIEZAS: 1,250`.
+
+## Comprobaciones y correcciones
+
+Cada cantidad está marcada como verificada o no verificada. Se verifica una cantidad cuando las piezas multiplicadas por el precio igual a la cantidad impresa, cuando la suma de su tabla equivale a un total impreso, o cuando el total de su lote equivale al informe de la memoria.
+
+Si una tabla contradice su propio total impreso de piezas, y exactamente una fila no se verifica, el programa calcula el valor correcto de esa fila del total impreso. Utiliza el valor corregido sólo si la cantidad impresa de dinero lo confirma. De lo contrario, el PDF está marcado como malo.
+
+Un lote que aparece varias veces en el mismo PDF se cuenta una vez cuando la cantidad es la misma. Esto sucede, por ejemplo, cuando un PDF contiene el mismo documento dos veces. Una página cuya cantidad es la suma de las otras páginas no se cuenta. Si el mismo lote aparece en varias páginas con diferentes cantidades, las cantidades se agregan, y el PDF se enumera para su revisión.
+
+Si un lote excede su límite, no coincide con el informe de la memoria, o el total no coincide con el total esperado, el programa lee los PDFs escaneados dudosos por segunda vez con una resolución superior y más contraste. Luego trata de explicar cada diferencia exactamente y sin ambigüedad:
+
+- Si la otra lectura de exactamente un PDF hace que el lote coincida, esa lectura se utiliza.
+- Si una fila en un PDF es una copia exacta de una fila en otro PDF, y el lote coincide cuando se retira la copia, la copia no se cuenta.
+- Si la otra lectura de exactamente un PDF, o la eliminación de exactamente una fila copiada, hace el total exactamente igual al total esperado, este cambio se aplica.
+
+Un PDF está marcado como malo sólo cuando la prueba es concluyente: cuando sus propios números contradicen sus propios totales impresos en cada lectura, o cuando contiene una copia exacta que es probada por un lote o por el total esperado. Todas las demás dudas se enumeran como sospechosas y no se cambian.
 
 ## Reglas para cada valor
 
-- Un número de lote tiene exactamente ocho dígitos y comienza con `24`, `25` o `26`. El programa ignora todos los demás números, por ejemplo precios, cantidades, fechas y códigos de producto. Si el OCR adjunta otros caracteres a un número de lote, como una barra vertical, el programa los elimina.
-- El programa lee números en notación mexicana. Un coma separa los miles y un punto separa los decimales. Por ejemplo, `1,250` es mil doscientos cincuenta, y `1,250.50` es mil doscientos cincuenta y medio.
-- El programa ignora las cantidades que tienen decimales, y las cantidades que son cero o negativo, porque un número de piezas es siempre un número entero. Esta regla también impide que los precios sean contados como piezas.
+- Un número de lote tiene exactamente ocho dígitos y comienza con `24`, `25` o `26`. El programa ignora todos los demás números, por ejemplo precios, cantidades, fechas, números de facturas y códigos de producto. Si el OCR adjunta otros caracteres a un número de lote, como una barra vertical, el programa los elimina.
+- El programa lee números en notación mexicana. Un coma separa los miles y un punto separa los decimales. Por ejemplo, `1,250` es mil doscientos cincuenta, y `1,250.50` es mil doscientos cincuenta y medio. Un número como `4.408`, donde el OCR lee la coma como punto, se lee como `4,408`, porque las piezas siempre son números enteros.
+- Se ignoran las marcas de cheque manuscritas junto a un número, como `695 ✓`.
 - El programa salta cada archivo cuyo nombre contiene `FALTA REVISION`. El programa ignora la diferencia entre el caso superior y el caso inferior, y el O puede tener un acento. Los archivos eliminados no cuentan hacia ningún total.
-- Si una sola cantidad es mayor que `50,000`, el programa todavía lo añade al total. Cuando el programa termina, reporta cantidades como sospechosas.
 
 ## Opciones
 
 Opciones de lotes_auto.py:
 
 - `FOLDER` es la carpeta que contiene los archivos PDF. Se incluyen subcarpetas.
+- `--total-esperado N` establece el total previsto para la destrucción. El valor predeterminado es `344,451`. El valor 0 apaga el cheque.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
@@ -65,37 +93,36 @@ Opciones de diagnostico.py:
 
 - `PATH` es un solo archivo PDF, o una carpeta. Si es una carpeta, el programa examina todos los archivos PDF en ella.
 - `--lineas N` no muestra más que líneas N de texto para cada PDF. El valor predeterminado es 40.
+- `--segunda-lectura` utiliza la segunda lectura OCR, con una resolución más alta y más contraste.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
 ## Archivo de salida
 
-lotes_auto.py escribe los siguientes archivos en la carpeta FOLDER. Reemplaza los archivos existentes con los mismos nombres. Si un archivo estaría vacío, el programa lo borra en su lugar.
+lotes_auto.py escribe los siguientes archivos en la carpeta FOLDER. Reemplaza los archivos existentes con los mismos nombres.
 
-`totales_lotes.xlsx` contiene el resultado. Tiene una hoja con el nombre `Lotes`. La hoja tiene dos columnas, `Lote` y `Cantidad en Piezas`, y una fila para cada lote. Las filas están clasificadas por número de lote. Las cantidades se almacenan como números y se muestran con agrupación de dígitos, por ejemplo `1,406`.
+`totales_lotes.xlsx` contiene el resultado en una hoja con el nombre `Lotes`. La hoja contiene tres tablas lado a lado: `Cantidad de producto retirado`, `Cantidad no distribuida` y `Cantidad total para destrucción`. Cada tabla tiene las columnas `Lote` y `Cantidad en Piezas` y una fila `TOTAL`. Las tres tablas enumeran los mismos lotes en el mismo orden, por lo que una fila se puede leer a través de las tablas. La tercera tabla y los totales son fórmulas, por lo que se actualizan cuando se cambia un número a mano. Debajo de la tercera tabla, la hoja muestra el total esperado y la diferencia. Las células de lotes que exceden un límite o no coinciden con el informe de la memoria son rojas.
 
-`detalle_lotes.txt` enumera cada cantidad que se agregó a cada lote, junto con el nombre del PDF que contiene la cantidad. Utilice este archivo para encontrar la fuente de un total que se ve mal.
+`detalle_lotes.txt` lista, para cada lote, cada cantidad que se encontró, el PDF y la página que lo contienen, ya sea verificada y por qué, y si se cuenta. También muestra los valores del informe de la memoria. Utilice este archivo para encontrar la fuente de un total que se ve mal.
 
-`revisar_a_mano.txt` tiene dos secciones. La primera sección enumera los archivos que fueron saltados porque su nombre contiene `FALTA REVISION`. En la segunda sección se enumeran los PDF de los que no se puede leer ninguna cantidad, cada uno con la razón. Las posibles razones son: no hay cantidades legibles; un PDF escaneado y ningún motor OCR; un error al leer el archivo.
+`revisar_a_mano.txt` enumera todo lo que necesita una persona: un resumen con los totales y el total esperado, los PDFs que están marcados como malos y por qué, las correcciones que se aplicaron, los lotes que exceden un límite o no coinciden con el informe de memoria junto con sus PDFs, los PDF sospechosos, los lotes que se repiten en un PDF, los lotes que aparecen con la misma cantidad en varios PDF, los PDF sin cantidades legibles, y los archivos que fueron `FALTA REVISION`.
 
-`sin_resultado.log` contiene, para cada PDF que no produjo cantidad, la razón y el texto completo que el programa leyó de él. Mira este archivo primero cuando un PDF no se lee correctamente.
+`sin_resultado.log` contiene, para cada PDF que no produjo cantidad, la razón, el texto completo que el programa leyó de él y las decisiones que el programa tomó. Mira este archivo primero cuando un PDF no se lee correctamente.
 
 ## Mensajes de consola
 
-Mientras funciona, lotes_auto.py muestra una línea para cada PDF. El texto después de la flecha tiene el siguiente significado:
+Mientras funciona, lotes_auto.py muestra una línea para cada PDF. El texto después de la flecha dice cuántas cantidades retiradas y no distribuidas fueron leídas, si el PDF es un informe de memoria, y si el texto fue leído directamente (`texto`) o con OCR (`OCR`). Otros mensajes:
 
-- `-> N cantidades (texto)` significa que el programa leyó cantidades N de un PDF que contiene texto.
-- `-> N cantidades (OCR)` significa que el programa leyó cantidades N de un PDF escaneado.
-- `-> 0 cantidades` significa que el programa no leyó cantidad. El archivo sin_resultado.log muestra el texto que lee.
 - `-> omitido (FALTA REVISION)` significa que el programa saltó el archivo debido a su nombre.
 - `-> escaneado, OCR no disponible` significa que el PDF es escaneado y que ningún motor OCR está instalado.
 - `-> ERROR` significa que el programa no pudo abrir o leer el archivo.
+- `Segunda lectura` significa que el programa lee PDFs escaneados dudosos por segunda vez.
 
-Al final, el programa muestra el número de lotes y cantidades y los nombres de los archivos que escribió. Si una sola cantidad es mayor que `50,000`, también muestra una lista de estas cantidades bajo el título `cantidades sospechosamente grandes`.
+Al final, el programa muestra los tres totales y compara el total para la destrucción con el total esperado. La palabra `COINCIDE` significa que los totales son iguales. De lo contrario se muestra la diferencia. Luego enumera los PDF que están marcados como malos.
 
 ## Valores de retorno del programa
 
-- `0` significa que el programa terminó con éxito.
+- `0` significa que el programa terminó. Compruebe el resumen para ver si los totales coinciden.
 - `1` significa que el programa no pudo escribir el archivo Excel. Normalmente el archivo está abierto en Excel.
 - `2` significa que los argumentos no son válidos, o que la carpeta no existe.
 
@@ -103,15 +130,23 @@ Al final, el programa muestra el número de lotes y cantidades y los nombres de 
 
 Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con cualquier editor de texto. Guarda el archivo en la codificación UTF-8.
 
-`LOTE_WORDS` y `CANT_WORDS` son expresiones regulares. Contienen las palabras que marcan números y cantidades de lote.
+`TOTAL_ESPERADO` es el total previsto para la destrucción. El valor predeterminado es `344451`. El valor `None` apaga el cheque.
 
-`PRIORIDAD_CANTIDAD` decide qué columna de cantidad o fila se utiliza cuando un documento tiene varios. El programa utiliza la primera palabra en esta lista que aparece en un título de columna. La lista predeterminada es `pieza`, `devuel`, `frasco`, `ampollet`, `ampula`, `vial`, `recibid`, `cantidad`, `factur`. Esto significa que se prefiere una columna sobre piezas o sobre bienes devueltos, y que una cantidad facturada se utiliza sólo si no existe otra cantidad.
+`MAX_RETIRADO_POR_LOTE` y `MAX_NO_DISTRIBUIDA_POR_LOTE` son los límites para cada lote. Los valores predeterminados son `48042` y `82090`.
 
-`AVISO_CANTIDAD_GRANDE` es el límite por encima del cual una sola cantidad es reportada como sospechosa. El valor predeterminado es `50000`.
+`USAR_REPORTE_PARA_RETIRADO` decide cómo se utilizan las cantidades retiradas de un informe de memoria. Con el valor predeterminado `False`, sólo se utilizan para comprobar los documentos de devolución. Con `True`, también se utilizan para lotes que no tienen documento de devolución en la carpeta.
+
+`DUPLICADOS_EN_ARCHIVO` decide cómo se cuenta un lote que se repite en el mismo PDF. Con el valor predeterminado `iguales`, se cuenta una vez sólo cuando las cantidades son iguales. Con `todos`, siempre se cuenta una vez, y se mantiene la mayor cantidad.
 
 `OMITIR_NOMBRE` es el patrón para los nombres de los archivos que se saltan. El valor predeterminado coincide con `FALTA REVISION`.
 
 `LOTE_ID` es el patrón para un número de lote válido. El valor predeterminado acepta exactamente ocho dígitos que comienzan con `24`, `25` o `26`. Por ejemplo, para aceptar también los números de lote que comienzan con `27`, cambiar `2[456]` a `2[4567]`.
+
+`OCR_DPI` y `OCR_DPI_REINTENTO` son las resoluciones de la primera y segunda lectura de OCR. `CONFIANZA_MINIMA` es la confianza OCR abajo que una cantidad que no se verifica se enumera como sospechosa.
+
+`PRIORIDAD_RENGLON` decide qué fila de cantidad se utiliza en formas en las que cada columna describe un producto.
+
+`SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para comprender los títulos de columna y reconocer el tipo de página.
 
 ## Instalación
 
@@ -286,13 +321,14 @@ Después de un cambio, GitHub puede entregar la versión anterior durante unos m
 
 El archivo Excel no se puede guardar. El programa se detiene con código de retorno 1 cuando totales_lotes.xlsx está abierto en Excel. Cierre el archivo y ejecute el programa de nuevo.
 
-Todos o muchos PDFs muestran `0 cantidades`. Ejecute diagnostico.py con uno de estos PDFs. Si el texto que muestra está vacío, el PDF es escaneado y el OCR no lo lee. Si el texto está ahí pero no se detecta nada, el programa no conoce las etiquetas ni el diseño del documento. El texto muestra qué palabras usa el documento. El mismo texto está en sin_resultado.log. Puedes añadir estas palabras a la configuración.
+El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de la memoria, y qué PDFs contribuyen a ellos. Entonces busca estos lotes en detalle_lotes.txt. Las causas comunes son:
 
-Un total es demasiado grande. Busque el número de lote en detalle_lotes.txt. Este archivo muestra cada cantidad que se agregó y el nombre del PDF que lo contiene. Estas son causas comunes:
+- Un PDF que pertenece a la memoria está desaparecido de la carpeta, o se llama `FALTA REVISION`.
+- El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se observa como `dudosa`.
+- El mismo documento está en la carpeta dos veces bajo nombres diferentes.
+- El programa utilizó la columna equivocada para la cantidad, porque el documento utiliza un diseño que el programa no sabe. Ejecute diagnostico.py con este PDF para ver qué columna fue elegida y por qué.
 
-- El programa utilizó la columna equivocada para la cantidad, porque el documento utiliza un título de columna que el programa no sabe.
-- The OCR joined two numbers that are close together into one number.
-- El mismo PDF está en la carpeta dos veces.
+Todos o muchos PDF no muestran cantidades. Ejecute diagnostico.py con uno de estos PDFs. Si el texto que muestra está vacío, el PDF es escaneado y el OCR no lo lee. Si el texto está ahí pero no se detecta nada, el programa no conoce el diseño del documento.
 
 El OCR no se puede cargar en Windows, y el mensaje contiene `DLL load failed`. Instala el paquete msvc-runtime como se muestra en las instrucciones para Windows.
 
@@ -302,11 +338,11 @@ pip no puede instalar rapidocr_onnxruntime. Este paquete admite versiones de Pyt
 
 ## Limitaciones
 
-El OCR lee números manuscritos cuando están escritos claramente. No lee fiablemente la escritura que es difícil de leer, marca de verificación, o abreviaturas escritas a mano como `N/A`. Los PDF con cantidades que no se pueden leer se enumeran en revisar_a_mano.txt y deben ser revisados por una persona.
+El OCR lee números manuscritos cuando están escritos claramente. No lee fiablemente la escritura que es difícil de leer, o abreviaturas escritas a mano como `N/A`. Por lo tanto, no se leen cuantitativas que se escriben a mano en forma. Estos PDF están listados en revisar_a_mano.txt y deben ser revisados por una persona.
 
-El OCR puede leer un dígito erróneamente, especialmente cuando un escaneo está borroso o inclinado. Compare algunos totales de PDF escaneados con detalle_lotes.txt.
+El OCR puede leer un dígito erróneamente, especialmente cuando un escaneo está borroso. Las cantidades verificadas por un precio, un total impreso o el informe de la memoria son fiables. Las cantidades que no se verifican deben compararse con el PDF.
 
-El formato de un número de lote es establecido por `LOTE_ID`. El programa ignora los números de lotes en otros formatos hasta que el patrón sea cambiado.
+La segunda lectura de OCR lleva tiempo. Cuando el total no coincide, todos los PDF escaneados con cantidades que no se verifican se leen de nuevo, por lo que una carrera puede tardar aproximadamente el doble de tiempo.
 
 El programa espera que las cantidades sean números enteros de piezas. No convierte documentos que cuenten cajas u otras unidades.
 

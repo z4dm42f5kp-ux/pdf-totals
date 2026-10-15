@@ -4,11 +4,17 @@ Este archivo fue traducido automáticamente del original inglés con Argos Trans
 
 Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals lee una carpeta de documentos PDF, tales como facturas, notas de entrega y formularios para productos devueltos. Encuentra cada número de lotes y el número de piezas que se registran para cada lote. A continuación, escribe el número total de piezas para cada lote a un archivo Excel.
+pdf-totals lee una carpeta de documentos PDF sobre una memoria de producto, como formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote calcula tres cantidades y las escribe a un archivo Excel:
 
-El programa lee el texto de PDF que contiene texto. Lee PDF escaneado con reconocimiento de caracteres ópticos (OCR). Reconoce varios diseños comunes: tablas con columna de lotes y columna de cantidad, tablas en las que el número de lotes es parte de la descripción, formas en las que cada columna describe un producto, y líneas con etiquetas como `LOTE: 25240310` y `CANTIDAD: 1,250`.
+- la cantidad retirada: piezas que fueron devueltas o recuperadas del mercado;
+- la cantidad no distribuida: piezas que aún están en inventario;
+- la cantidad total para la destrucción: la suma de ambos.
 
-El programa fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `24`, `25` o `26`. Esta regla es fácil de cambiar.
+El programa no depende solamente de las palabras en los documentos. Examina la estructura de cada tabla: que columna contiene números enteros, que columna multiplicada por el precio unitario da la cantidad impresa, y que columna añade hasta un total impreso. En un informe de memoria encuentra las columnas por aritmética, porque menos fabricado distribuido no es igual a no distribuido, y no distribuido más retirado equivale al total.
+
+El programa revisa el resultado. Un lote no debe exceder piezas retiradas `48,042` o piezas `82,090` que no fueron distribuidas, y el total para la destrucción debe ser exactamente `344,451`. Si algo no coincide, los PDF escaneados dudosos son leídos por segunda vez, las diferencias se corren sólo cuando existe una prueba exacta, y los PDF están marcados como malos sólo en pruebas concluyentes.
+
+El programa lee el texto de PDF que contiene texto y lee PDF escaneados con reconocimiento de caracteres ópticos (OCR). Fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `24`, `25` o `26`. Estas reglas son fáciles de cambiar.
 
 ## Necesidades
 
@@ -58,9 +64,9 @@ macOS, Linux, FreeBSD, OpenBSD y NetBSD:
 
 El programa también busca todos los subcarpetas. Se salta cada archivo cuyo nombre contiene `FALTA REVISION`. Cuando el programa termina, la carpeta contiene estos archivos:
 
-- totales_lotes.xlsx contiene una fila para cada lote con el número total de piezas.
-- detalle_lotes.txt enumera cada cantidad que se agregó a cada lote y el nombre del PDF que lo contiene.
-- revisar_a_mano.txt enumera los PDFs saltados y los PDF de los que no se puede leer ninguna cantidad.
+- totales_lotes.xlsx contiene tres tablas lado a lado en una hoja: retirada, no distribuida, y total para la destrucción, cada una con el número de lote y el número de piezas.
+- detalle_lotes.txt enumera cada cantidad de cada lote, el PDF que lo contiene y si se verifica.
+- revisar_a_mano.txt enumera los PDFs que están marcados como malos, las correcciones, los lotes que no coinciden, los PDF sospechosos y los PDFs de los que no se puede leer ninguna cantidad.
 - sin_resultado.log contiene el texto que fue leído en cada PDF que no produjo cantidad.
 
 Para ver lo que el programa lee y detecta en un PDF, ejecute diagnostico.py con el camino del PDF. diagnostico.py no escribe ningún archivo.

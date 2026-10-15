@@ -1,6 +1,6 @@
 # Manual de pdf-totals
 
-Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
+Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
 ## Nombre
 
@@ -12,7 +12,7 @@ diagnostico.py - mostrar lo que lotes_auto.py lee y detecta en uno o más docume
 
 ```
 python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
+python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
 ```
 
 ## Descripción
@@ -51,14 +51,14 @@ Luego el programa decide qué columna contiene el número de piezas. Sólo se co
 2. La suma de la columna equivale a un número que se imprime en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
 3. El título de la columna. Títulos como `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` o `DEVUELTAS` cuentan a favor. Títulos como `FACTURADA` o `DISTRIBUIDA` cuentan con contra, porque describen la cantidad original y no la cantidad devuelta. Títulos con `CAJAS` cuentan contra, porque cuentan cajas y no piezas.
 
-Un informe de retiro es reconocido solo por aritmética. En un informe de retirada, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
+Un informe de retiro es reconocido solo por aritmética. En un informe de retiro, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
 
 - manufacturado menos distribuidos iguales no distribuidos;
 - no distribuido más retirado equivale al total para la destrucción.
 
 El programa encuentra las columnas que cumplen estas relaciones, por lo que los títulos de columna no son necesarios. La columna retirada es la que nunca es más grande que la columna distribuida. Si una fila del informe no cumple las relaciones, por ejemplo porque el OCR lee un dígito erróneamente, el programa utiliza las relaciones para recuperar el valor correcto.
 
-El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario no dan cantidades distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
+El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario, las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario no dan cantidades distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
 
 El programa también lee otros dos diseños:
 
@@ -75,7 +75,7 @@ Dos páginas del mismo PDF que contienen exactamente los mismos números de lote
 
 Un lote que aparece en varias otras páginas del mismo PDF se cuenta una vez cuando la cantidad es la misma. Una página cuya cantidad es la suma de las otras páginas no se cuenta. Si el mismo lote aparece en varias páginas con diferentes cantidades, las cantidades se agregan, y el PDF se enumera para su revisión. Varias filas del mismo lote en la misma página se añaden siempre, porque son líneas separadas del documento, por ejemplo diferentes facturas.
 
-Si un lote excede su límite, no coincide con el informe de retirada, o el total no coincide con el total esperado, el programa lee los PDFs escaneados dudosos por segunda vez con una resolución superior y más contraste. Luego trata de explicar cada diferencia exactamente y sin ambigüedad:
+Si un lote excede su límite, no coincide con el informe de retirada, o el total no coincide con el total esperado, el programa lee los PDFs escaneados dudosos dos veces más. La segunda lectura utiliza una resolución más alta y más contraste. La tercera lectura amplía la imagen al doble de su tamaño y la afila, lo que ayuda con texto pequeño o borroso. El programa mantiene la lectura con las cantidades más verificadas, y mantiene las otras lecturas para el siguiente paso. Luego trata de explicar cada diferencia exactamente y sin ambigüedad:
 
 - Si la otra lectura de exactamente un PDF hace que el lote coincida, esa lectura se utiliza.
 - Si una fila en un PDF es una copia exacta de una fila en otro PDF, y el lote coincide cuando se retira la copia, la copia no se cuenta.
@@ -108,8 +108,8 @@ Opciones de lotes_auto.py:
 Opciones de diagnostico.py:
 
 - `PATH` es un solo archivo PDF, o una carpeta. Si es una carpeta, el programa examina todos los archivos PDF en ella.
-- `--lineas N` no muestra más que N líneas de texto para cada PDF. El valor predeterminado es 40.
-- `--segunda-lectura` utiliza la segunda lectura OCR, con una resolución más alta y más contraste.
+- `--lineas N` no muestra más que líneas N de texto para cada PDF. El valor predeterminado es 40.
+- `--lectura N` utiliza OCR lectura N: 1 es la lectura normal, 2 utiliza una resolución más alta y más contraste, y 3 amplía y afila la imagen.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
@@ -121,9 +121,11 @@ lotes_auto.py crea la carpeta `resultados_lotes` dentro de la carpeta FOLDER y e
 
 `detalle_lotes.txt` lista, para cada lote, cada cantidad que se encontró, el PDF y la página que lo contienen, ya sea verificada y por qué, y si se cuenta. También muestra los valores del informe de retirada. Utilice este archivo para encontrar la fuente de un total que se ve mal.
 
-`revisar_a_mano.txt` enumera todo lo que necesita una persona, en secciones numeradas: un resumen con los tres totales y sus valores esperados; una lista de acciones en el orden en que deben hacerse; los lotes que no coinciden, con cada cantidad que se encontró para ellos, los PDF sin cantidades legibles que los mencionan, los archivos `FALTA REVISION` que se mencionan, y una nota cuando tal archivo contiene exactamente la cantidad faltada; los lotes de Excel
+`revisar_a_mano.txt` enumera todo lo que necesita una persona, en secciones numeradas: un resumen con los tres totales y sus valores esperados; una lista de acciones en el orden en que deben hacerse; los lotes que no coinciden, con cada cantidad que se encontró para ellos, los PDF sin cantidades legibles que los mencionan, los archivos `FALTA REVISION` que se mencionan, y una nota cuando tal archivo contiene exactamente la cantidad faltada; los números de corrección de Excel
 
-Los archivos cuyo nombre contiene `FALTA REVISION` sólo se leen para informar de lo que contienen. Nunca cuentan con un total.
+Los archivos cuyo nombre contiene `FALTA REVISION` sólo se leen para informar lo que contienen. Nunca cuentan con un total.
+
+La carpeta `paginas` contiene una imagen (PNG) de cada página que necesita una persona: páginas sin cantidades legibles, páginas con cantidades de lotes que no coinciden, cantidades sospechosas, cantidades corregidas, cantidades con un número de lote que no está en el archivo Excel, y páginas de PDF que están marcadas como malas. revisar_a_mano.txt nombra la imagen junto a cada problema, para que una página pueda ser revisada sin abrir el PDF. Las imágenes no se pueden crear en FreeBSD, OpenBSD y NetBSD.
 
 `sin_resultado.log` contiene, para cada PDF que no produjo cantidad, la razón, el texto completo que el programa leyó de él y las decisiones que el programa tomó. Mira este archivo primero cuando un PDF no se lee correctamente.
 
@@ -164,11 +166,11 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 `LOTE_ID` es el patrón para un número de lote válido. El valor predeterminado acepta exactamente ocho dígitos que comienzan con `25` o `26`. Por ejemplo, para aceptar también los números de lote que comienzan con `24`, cambiar `2[56]` a `2[456]`.
 
-`OCR_DPI` y `OCR_DPI_REINTENTO` son las resoluciones de la primera y segunda lectura de OCR. `CONFIANZA_MINIMA` es la confianza OCR abajo que una cantidad que no se verifica se enumera como sospechosa.
+`OCR_DPI` es la resolución de la primera y tercera lectura de OCR, y `OCR_DPI_REINTENTO` es la resolución de la segunda lectura de OCR. Las páginas no se convierten en blanco y negro, porque en pruebas el motor OCR leyó tales páginas mucho peor. `CONFIANZA_MINIMA` es la confianza OCR abajo que una cantidad que no se verifica se enumera como sospechosa.
 
 `PRIORIDAD_RENGLON` decide qué fila de cantidad se utiliza en formas en las que cada columna describe un producto.
 
-`SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para entender los títulos de columna y para reconocer el tipo de una página.
+`SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para comprender los títulos de columna y reconocer el tipo de página.
 
 ## Instalación
 
@@ -201,7 +203,7 @@ Para ejecutar el programa:
 & "$env:USERPROFILE\pdf-totals\python\python.exe" "$env:USERPROFILE\pdf-totals\lotes_auto.py" "C:\path\to\pdfs"
 ```
 
-Si las descargas están bloqueadas en el ordenador, descargue los archivos `python-3.12.10-embed-amd64.zip` y `get-pip.py` en otro ordenador. Copiarlos en la carpeta Descargas. Luego reemplace los dos pasos `Invoke-WebRequest` en el comando con los caminos de estos archivos.
+Si las descargas están bloqueadas en el ordenador, descargue los archivos `python-3.12.10-embed-amd64.zip` y `get-pip.py` en otro ordenador. Copiarlos en la carpeta Descargas. Luego, reemplace los dos pasos `Invoke-WebRequest` en el comando con los caminos de estos archivos.
 
 Estas instrucciones son para procesadores de 64 bits de Intel y AMD. Para Windows en procesadores ARM, utilice `python-3.12.10-embed-arm64.zip` en su lugar. Esto no ha sido probado.
 
@@ -277,7 +279,7 @@ Si su sistema Alpine Linux utiliza `sudo` en lugar de `doas`, reemplace `doas` c
 
 ### FreeBSD, OpenBSD y NetBSD
 
-En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderizado PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
+En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderización PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
 
 El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography se instala desde los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
 
@@ -343,7 +345,7 @@ Después de un cambio, GitHub puede entregar la versión anterior durante unos m
 
 El archivo Excel no se puede guardar. El programa se detiene con código de retorno 1 cuando totales_lotes.xlsx está abierto en Excel. Cierre el archivo y ejecute el programa de nuevo.
 
-El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retiro, y qué PDFs contribuyen a ellos. Entonces busca estos lotes en detalle_lotes.txt. Las causas comunes son:
+El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retiro, y qué PDFs contribuyen a ellos. Entonces busque estos lotes en detalle_lotes.txt. Las causas comunes son:
 
 - Un PDF que pertenece a la retirada falta de la carpeta, o se llama `FALTA REVISION`.
 - El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se señala como `dudosa`.

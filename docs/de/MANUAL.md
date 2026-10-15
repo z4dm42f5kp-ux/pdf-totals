@@ -4,7 +4,7 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 ## Name
 
-lotes_auto.py - Berechnen Sie für jede Chargennummer die Stücke, die zurückgezogen wurden, die Stücke, die nicht verteilt wurden, und die Gesamtzahl der Stücke zur Zerstörung
+lotes_auto.py - Berechnen Sie für jede Chargennummer die Stücke, die zurückgezogen wurden, die Stücke, die nicht verteilt wurden und die Gesamtzahl der Stücke zur Zerstörung
 
 diagnostico.py - zeigen, was lotes_auto.py in einem oder mehreren PDF-Dokumenten liest und erkennt
 
@@ -20,10 +20,10 @@ python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
 lotes_auto.py liest alle PDF-Dateien im Ordner FOLDER und in allen Unterordnern. In den Dokumenten geht es um die Rücknahme eines Produkts vom Markt: Rückgabeformulare, Lieferquittungen, Warenquittungen, Inventarlisten und Rücknahmeberichte. Für jede Chargennummer berechnet das Programm drei Mengen:
 
 - Die zurückgenommene Menge (`Cantidad de producto retirado`). Dies sind die Stücke, die vom Markt zurückgegeben oder zurückgewonnen wurden. Sie stammen aus Rückgabeformularen, Lieferquittungen und Warenquittungen.
-- Die nicht verteilte Menge (`Cantidad no distribuida`). Dies sind die Stücke, die noch im Bestand sind und nie verteilt wurden. Sie stammen aus Inventardokumenten. Verfügt eine Partie über kein Inventardokument, so wird die Menge dem Rücknahmebericht entnommen.
+- Die nicht verteilte Menge (`Cantidad no distribuida`). Dies sind die Stücke, die noch im Bestand sind und nie verteilt wurden. Sie stammen aus Inventardokumenten. Verfügt eine Partie über kein Inventardokument, wird die Menge dem Rücknahmebericht entnommen.
 - Die Gesamtmenge für die Zerstörung (`Cantidad total para destrucción`). Dies ist die Summe der beiden anderen Mengen.
 
-Das Programm überprüft dann das Ergebnis. Eine Charge darf nicht mehr als `48,042`-Stücke oder mehr als `82,090`-Stücke enthalten, die nicht verteilt wurden. Die Gesamtmenge zur Zerstörung aller Chargen muss genau `344,451` betragen. Diese Grenzen können in der Konfiguration geändert werden.
+Das Programm überprüft dann das Ergebnis. Eine Charge darf nicht mehr als `48,042`-Stücke zurückgenommen haben oder mehr als `82,090`-Stücke, die nicht verteilt wurden. Die Gesamtmenge zur Zerstörung aller Chargen muss genau `344,451` betragen. Diese Grenzen können in der Konfiguration geändert werden.
 
 Wenn ein PDF Text enthält, liest das Programm den Text direkt. Wenn eine Seite keinen Text enthält, behandelt das Programm die Seite als gescanntes Bild und liest es mit optischer Zeichenerkennung (OCR). Wenn keine OCR-Engine installiert ist, liest das Programm keine gescannten PDFs und listet sie zur manuellen Überprüfung auf.
 
@@ -50,7 +50,7 @@ Ein Rückzugsbericht wird allein durch Arithmetik erkannt. In einem Auszahlungsb
 
 Das Programm findet die Spalten, die diese Beziehungen erfüllen, so dass die Spaltentitel nicht benötigt werden. Die zurückgezogene Spalte ist diejenige, die niemals größer ist als die verteilte Spalte. Wenn eine Zeile des Berichts die Relationen nicht erfüllt, z. B. weil die OCR eine Ziffer falsch gelesen hat, verwendet das Programm die Relationen, um den richtigen Wert wiederherzustellen.
 
-Die Art der einzelnen Mengen wird wie folgt festgelegt. Eine Größe wird nicht verteilt, wenn ihr Spaltentitel oder Zeilentitel dies sagt, zum Beispiel `EXISTENCIA`, `INVENTARIO` oder `NO DISTRIBUIDO`. Ansonsten entscheiden die Worte der ganzen Seite: Seiten über Rückgaben, Auszahlungen oder Quittungen geben zurückgezogene Mengen an, und Seiten über Inventar geben keine verteilten Mengen an. Wenn eine Seite keinen eindeutigen Typ hat, wird der Typ der anderen Seiten derselben PDF verwendet. Wenn das PDF keinen eindeutigen Typ hat, zählt die Menge als zurückgezogen und eine Notiz wird hinzugefügt.
+Die Art jeder Menge wird wie folgt festgelegt. Eine Größe wird nicht verteilt, wenn ihr Spaltentitel oder Zeilentitel dies sagt, zum Beispiel `EXISTENCIA`, `INVENTARIO` oder `NO DISTRIBUIDO`. Ansonsten entscheiden die Worte der ganzen Seite: Seiten über Rückgaben, Auszahlungen oder Quittungen geben zurückgezogene Mengen an, und Seiten über Inventar geben keine verteilten Mengen an. Wenn eine Seite keinen eindeutigen Typ hat, wird der Typ der anderen Seiten derselben PDF verwendet. Wenn das PDF keinen eindeutigen Typ hat, zählt die Menge als zurückgezogen und eine Notiz wird hinzugefügt.
 
 Das Programm liest auch zwei andere Layouts:
 
@@ -59,19 +59,19 @@ Das Programm liest auch zwei andere Layouts:
 
 ## Kontrollen und Berichtigungen
 
-Jede Menge wird als verifiziert oder nicht verifiziert gekennzeichnet. Eine Menge wird überprüft, wenn die mit dem Stückpreis multiplizierte Stückzahl dem gedruckten Gesamtpreis entspricht, wenn die Summe ihrer Tabelle einer gedruckten Gesamtmenge entspricht oder wenn die Summe ihrer Charge der Rücknahmemeldung entspricht.
+Jede Menge wird als überprüft oder nicht überprüft gekennzeichnet. Eine Menge wird überprüft, wenn die mit dem Stückpreis multiplizierte Stückzahl dem gedruckten Gesamtpreis entspricht, wenn die Summe ihrer Tabelle einer gedruckten Gesamtmenge entspricht oder wenn die Summe ihrer Charge der Rücknahmemeldung entspricht.
 
-Wenn eine Tabelle ihrer eigenen gedruckten Stückzahl widerspricht und genau eine Zeile nicht verifiziert wird, berechnet das Programm aus der gedruckten Summe den korrekten Wert dieser Zeile. Er verwendet den korrigierten Wert nur, wenn der gedruckte Gesamtpreis ihn bestätigt. Ansonsten wird das PDF als schlecht markiert.
+Wenn eine Tabelle ihrer eigenen gedruckten Stückzahl widerspricht und genau eine Zeile nicht verifiziert wird, berechnet das Programm aus der gedruckten Summe den richtigen Wert dieser Zeile. Er verwendet den korrigierten Wert nur, wenn der gedruckte Gesamtpreis ihn bestätigt. Ansonsten wird das PDF als schlecht markiert.
 
-Ein Charge, der mehrmals im selben PDF erscheint, wird einmal gezählt, wenn die Menge gleich ist. Dies geschieht beispielsweise, wenn ein PDF das gleiche Dokument zweimal enthält. Eine Seite, deren Menge die Summe der anderen Seiten ist, wird nicht gezählt. Wenn der gleiche Charge auf mehreren Seiten mit unterschiedlichen Mengen erscheint, werden die Mengen hinzugefügt und das PDF zur Überprüfung aufgelistet.
+Ein Charge, der mehrmals im gleichen PDF erscheint, wird einmal gezählt, wenn die Menge gleich ist. Dies geschieht beispielsweise, wenn ein PDF das gleiche Dokument zweimal enthält. Eine Seite, deren Menge die Summe der anderen Seiten ist, wird nicht gezählt. Wenn der gleiche Charge auf mehreren Seiten mit unterschiedlichen Mengen erscheint, werden die Mengen hinzugefügt und das PDF zur Überprüfung aufgelistet.
 
 Wenn ein Charge seine Grenze überschreitet, nicht mit dem Auszahlungsbericht übereinstimmt oder die Summe nicht mit der erwarteten Summe übereinstimmt, liest das Programm die zweifelhaft gescannten PDFs ein zweites Mal mit einer höheren Auflösung und mehr Kontrast. Dann versucht es, jeden Unterschied genau und ohne Zweideutigkeit zu erklären:
 
-- Wenn das andere Lesen von genau einem PDF die Charge-Übereinstimmung macht, wird dieses Lesen verwendet.
+- Wenn die andere Lektüre von genau einem PDF die Charge-Match macht, wird diese Lektüre verwendet.
 - Wenn eine Zeile in einem PDF eine exakte Kopie einer Zeile in einem anderen PDF ist und die Charge beim Entfernen der Kopie übereinstimmt, wird die Kopie nicht gezählt.
-- Wenn das andere Lesen von genau einem PDF oder das Entfernen von genau einer kopierten Zeile die Gesamtsumme genau gleich der erwarteten Gesamtsumme macht, wird diese Änderung angewendet.
+- Wenn das andere Lesen von genau einem PDF oder das Entfernen von genau einer kopierten Zeile die Gesamtsumme genau der erwarteten Gesamtsumme entspricht, wird diese Änderung angewendet.
 
-Ein PDF wird nur dann als schlecht markiert, wenn der Beweis schlüssig ist: wenn seine eigenen Zahlen in jeder Lesung seinen eigenen gedruckten Summen widersprechen oder wenn es eine exakte Kopie enthält, die durch eine Charge oder durch die erwartete Summe bewiesen wird. Alle anderen Zweifel werden als verdächtig aufgelistet und nicht verändert.
+Ein PDF wird nur dann als schlecht markiert, wenn der Beweis schlüssig ist: wenn seine eigenen Zahlen in jeder Lesung seinen eigenen gedruckten Gesamtwerten widersprechen oder wenn es eine genaue Kopie enthält, die durch eine Charge oder durch die erwartete Gesamtsumme bewiesen wird. Alle anderen Zweifel werden als verdächtig aufgeführt und nicht verändert.
 
 ## Regeln für jeden Wert
 
@@ -105,13 +105,13 @@ lotes_auto.py schreibt die folgenden Dateien in den Ordner FOLDER. Es ersetzt be
 
 `detalle_lotes.txt` listet für jede Charge, jede gefundene Menge, das PDF und die Seite auf, die es enthalten, ob es verifiziert ist und warum und ob es gezählt wurde. Es zeigt auch die Werte des Rückzugsberichts. Verwenden Sie diese Datei, um die Quelle einer Summe zu finden, die falsch aussieht.
 
-`revisar_a_mano.txt` listet alles auf, was eine Person braucht: eine Zusammenfassung mit den Summen und der erwarteten Summe, die PDFs, die als schlecht markiert sind und warum, die Korrekturen, die angewendet wurden, die Chargen, die eine Grenze überschreiten oder nicht mit dem Entnahmebericht zusammen mit ihren PDFs übereinstimmen, die verdächtigen PDFs, die Chargen, die innerhalb einer PDF wiederholt werden, die Chargen, die mit der gleichen Menge in mehreren PDFs erscheinen, die PDFs ohne lesbare Mengen und die Dateien, die wegen `FALTA REVISION` übersprungen wurden.
+`revisar_a_mano.txt` listet alles auf, was eine Person braucht: eine Zusammenfassung mit den Summen und der erwarteten Summe, die PDFs, die als schlecht markiert sind und warum, die Korrekturen, die angewendet wurden, die Chargen, die eine Grenze überschreiten oder nicht mit dem Auszahlungsbericht zusammen mit ihren PDFs übereinstimmen, die verdächtigen PDFs, die Chargen, die innerhalb einer PDF wiederholt werden, die Chargen, die mit der gleichen Menge in mehreren PDFs erscheinen, die PDFs ohne lesbare Mengen und die Dateien, die wegen `FALTA REVISION` übersprungen wurden.
 
 `sin_resultado.log` enthält für jedes PDF, das keine Menge produziert hat, den Grund, den vollständigen Text, den das Programm daraus gelesen hat, und die Entscheidungen, die das Programm getroffen hat. Schauen Sie sich diese Datei zuerst an, wenn ein PDF nicht richtig gelesen wird.
 
 ## Konsolennachrichten
 
-Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text hinter dem Pfeil sagt, wie viele zurückgezogene und nicht verteilte Mengen gelesen wurden, ob das PDF ein Rückzugsbericht ist und ob der Text direkt (`texto`) oder mit OCR (`OCR`) gelesen wurde. Weitere Meldungen:
+Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an. Der Text hinter dem Pfeil sagt, wie viele zurückgezogene und nicht verteilte Mengen gelesen wurden, ob es sich bei dem PDF um einen Entnahmebericht handelt und ob der Text direkt (`texto`) oder mit OCR (`OCR`) gelesen wurde. Weitere Meldungen:
 
 - `-> omitido (FALTA REVISION)` bedeutet, dass das Programm die Datei aufgrund ihres Namens übersprungen hat.
 - `-> escaneado, OCR no disponible` bedeutet, dass das PDF gescannt wird und keine OCR-Engine installiert ist.
@@ -122,7 +122,7 @@ Am Ende zeigt das Programm die drei Summen und vergleicht die Summe für die Zer
 
 ## Rückgabewerte des Programms
 
-- `0` bedeutet, dass das Programm beendet ist. Überprüfen Sie die Zusammenfassung, um zu sehen, ob die Gesamtsummen übereinstimmen.
+- `0` bedeutet, dass das Programm beendet ist. Überprüfen Sie die Zusammenfassung, um zu sehen, ob die Summen übereinstimmen.
 - `1` bedeutet, dass das Programm die Excel-Datei nicht schreiben konnte. Normalerweise ist die Datei in Excel geöffnet.
 - `2` bedeutet, dass die Argumente nicht gültig sind oder dass der Ordner nicht existiert.
 
@@ -130,11 +130,11 @@ Am Ende zeigt das Programm die drei Summen und vergleicht die Summe für die Zer
 
 Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können sie mit jedem Texteditor ändern. Speichern Sie die Datei in der UTF-8-Codierung.
 
-`TOTAL_ESPERADO` ist die erwartete Summe für die Zerstörung. Der Standardwert ist `344451`. Der Wert `None` schaltet den Check ab.
+`TOTAL_ESPERADO` ist die erwartete Gesamtmenge für die Zerstörung. Der Standardwert ist `344451`. Der Wert `None` schaltet den Check ab.
 
 `MAX_RETIRADO_POR_LOTE` und `MAX_NO_DISTRIBUIDA_POR_LOTE` sind die Grenzwerte für jede Charge. Die Standardwerte sind `48042` und `82090`.
 
-`USAR_REPORTE_PARA_RETIRADO` entscheidet, wie die zurückgenommenen Mengen eines Rücknahmeberichts verwendet werden. Mit dem Standardwert `False` werden sie nur zur Überprüfung der Rücksendedokumente verwendet. Mit `True` werden sie auch für Chargen verwendet, die kein Rückgabedokument im Ordner haben.
+`USAR_REPORTE_PARA_RETIRADO` entscheidet, wie die zurückgezogenen Mengen eines Auszahlungsberichts verwendet werden. Mit dem Standardwert `False` werden sie nur zur Überprüfung der Rücksendedokumente verwendet. Mit `True` werden sie auch für Chargen verwendet, die kein Rückgabedokument im Ordner haben.
 
 `DUPLICADOS_EN_ARCHIVO` entscheidet, wie ein Charge, der im selben PDF wiederholt wird, gezählt wird. Mit dem Standardwert `iguales` wird er nur einmal gezählt, wenn die Mengen gleich sind. Mit `todos` wird es immer einmal gezählt und die größte Menge gehalten.
 
@@ -142,7 +142,7 @@ Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können s
 
 `LOTE_ID` ist das Muster für eine gültige Chargennummer. Der Standardwert akzeptiert genau acht Ziffern, die mit `24`, `25` oder `26` beginnen. Um beispielsweise auch Chargennummern zu akzeptieren, die mit `27` beginnen, ändern Sie `2[456]` in `2[4567]`.
 
-`OCR_DPI` und `OCR_DPI_REINTENTO` sind die Auflösungen des ersten und zweiten OCR-Messwerts. `CONFIANZA_MINIMA` ist das OCR-Vertrauen, unterhalb dessen eine nicht verifizierte Menge als verdächtig aufgeführt wird.
+`OCR_DPI` und `OCR_DPI_REINTENTO` sind die Auflösungen der ersten und zweiten OCR-Messung. `CONFIANZA_MINIMA` ist das OCR-Vertrauen, unterhalb dessen eine nicht verifizierte Menge als verdächtig aufgeführt wird.
 
 `PRIORIDAD_RENGLON` entscheidet, welche Mengenreihe in Formularen verwendet wird, in denen jede Spalte ein Produkt beschreibt.
 
@@ -185,7 +185,7 @@ Diese Anweisungen sind für 64-Bit-Prozessoren von Intel und AMD. Verwenden Sie 
 
 ### macOS
 
-Sie benötigen Administratorrechte nur zur Installation von Python. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
+Sie benötigen nur Administratorrechte, um Python zu installieren. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
 
 ```
 mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/main/diagnostico.py
@@ -257,9 +257,9 @@ Wenn Ihr Alpine Linux-System `sudo` anstelle von `doas` verwendet, ersetzen Sie 
 
 Auf diesen Systemen liest das Programm nur PDFs, die Text enthalten. Die OCR-Engine ist für diese Systeme nicht verfügbar. Die PDF-Rendering-Bibliothek, die pdfplumber verwendet, ist ebenfalls nicht verfügbar, aber pdfplumber kann Text ohne sie lesen.
 
-Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, so dass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
+Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, sodass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
 
-Führen Sie auf FreeBSD den ersten Befehl als root-Benutzer aus, beispielsweise mit `su` oder `sudo`:
+Führen Sie unter FreeBSD den ersten Befehl als root-Benutzer aus, beispielsweise mit `su` oder `sudo`:
 
 ```
 pkg install py311-pip py311-cryptography
@@ -323,7 +323,7 @@ Die Excel-Datei kann nicht gespeichert werden. Das Programm endet mit dem Rückg
 
 Die Gesamtsumme entspricht nicht der erwarteten Gesamtsumme. Open revisar_a_mano.txt. Der Abschnitt über Chargen, die nicht übereinstimmen, zeigt an, welche Chargen eine Grenze überschreiten oder vom Entnahmebericht abweichen und welche PDFs dazu beitragen. Suchen Sie dann nach diesen Chargen in detalle_lotes.txt. Häufige Ursachen sind:
 
-- Ein PDF, das zum Rückruf gehört, fehlt im Ordner oder heißt `FALTA REVISION`.
+- Ein PDF, das zur Auszahlung gehört, fehlt im Ordner oder heißt `FALTA REVISION`.
 - Die OCR hat eine Ziffer falsch gelesen. Die beiden Lesungen eines PDF werden verglichen, und ein Unterschied zwischen ihnen wird als `dudosa` vermerkt.
 - Das gleiche Dokument befindet sich zweimal im Ordner unter verschiedenen Namen.
 - Das Programm verwendete die falsche Spalte für die Menge, da das Dokument ein Layout verwendet, das das Programm nicht kennt. Führen Sie diagnostico.py mit diesem PDF aus, um zu sehen, welche Spalte ausgewählt wurde und warum.
@@ -340,7 +340,7 @@ pip kann rapidocr_onnxruntime nicht installieren. Dieses Paket unterstützt Pyth
 
 Die OCR liest handschriftliche Zahlen, wenn sie klar geschrieben sind. Es liest nicht zuverlässig Handschrift, die schwer zu lesen ist, oder handschriftliche Abkürzungen wie `N/A`. Mengen, die von Hand in ein Formular geschrieben werden, werden daher oft nicht gelesen. Diese PDFs sind in revisar_a_mano.txt aufgeführt und müssen von einer Person überprüft werden.
 
-Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan unscharf ist. Mengen, die durch einen Preis, eine gedruckte Gesamtsumme oder den Rückzugsbericht verifiziert werden, sind zuverlässig. Mengen, die nicht verifiziert sind, sollten mit dem PDF verglichen werden.
+Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan verschwommen ist. Mengen, die durch einen Preis, eine gedruckte Gesamtsumme oder den Rückzugsbericht verifiziert werden, sind zuverlässig. Mengen, die nicht verifiziert sind, sollten mit dem PDF verglichen werden.
 
 Die zweite OCR Lesung braucht Zeit. Wenn die Gesamtsumme nicht übereinstimmt, werden alle gescannten PDFs mit nicht verifizierten Mengen erneut gelesen, so dass ein Lauf etwa doppelt so lange dauern kann.
 

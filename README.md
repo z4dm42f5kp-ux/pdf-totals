@@ -2,13 +2,13 @@
 
 Languages: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
-pdf-totals reads a folder of PDF documents about a product recall, such as return forms, delivery receipts, goods receipts, inventory lists and recall reports. For each batch number it calculates three quantities and writes them to an Excel file:
+pdf-totals reads a folder of PDF documents about the withdrawal of a product from the market, such as return forms, delivery receipts, goods receipts, inventory lists and withdrawal reports. For each batch number it calculates three quantities and writes them to an Excel file:
 
 - the withdrawn quantity: pieces that were returned or recovered from the market;
 - the not distributed quantity: pieces that are still in inventory;
 - the total quantity for destruction: the sum of both.
 
-The program does not rely only on the words in the documents. It examines the structure of each table: which column contains whole numbers, which column multiplied by the unit price gives the printed amount, and which column adds up to a printed total. In a recall report it finds the columns by arithmetic, because fabricated minus distributed equals not distributed, and not distributed plus withdrawn equals the total.
+The program does not rely only on the words in the documents. It examines the structure of each table: which column contains whole numbers, which column multiplied by the unit price gives the printed total price, and which column adds up to a printed total. In a withdrawal report it finds the columns by arithmetic, because manufactured minus distributed equals not distributed, and not distributed plus withdrawn equals the total.
 
 The program then checks the result. A batch must not exceed `48,042` withdrawn pieces or `82,090` pieces that were not distributed, and the total for destruction must be exactly `344,451`. If something does not match, doubtful scanned PDFs are read a second time, differences are corrected only when an exact proof exists, and PDFs are marked as bad only on conclusive evidence.
 

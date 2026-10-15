@@ -10,7 +10,7 @@ diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF do
 
 ```
 python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] [--segunda-lectura] PATH
+python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
 ```
 
 ## Description
@@ -73,7 +73,7 @@ Two pages of the same PDF that contain exactly the same batch numbers are treate
 
 A batch that appears on several other pages of the same PDF is counted once when the quantity is the same. A page whose quantity is the sum of the other pages is not counted. If the same batch appears on several pages with different quantities, the quantities are added, and the PDF is listed for review. Several rows of the same batch on the same page are always added, because they are separate lines of the document, for example different invoices.
 
-If a batch exceeds its limit, does not match the withdrawal report, or the total does not match the expected total, the program reads the doubtful scanned PDFs a second time with a higher resolution and more contrast. Then it tries to explain each difference exactly and without ambiguity:
+If a batch exceeds its limit, does not match the withdrawal report, or the total does not match the expected total, the program reads the doubtful scanned PDFs two more times. The second reading uses a higher resolution and more contrast. The third reading enlarges the image to twice its size and sharpens it, which helps with small or blurred text. The program keeps the reading with the most verified quantities, and keeps the other readings for the next step. Then it tries to explain each difference exactly and without ambiguity:
 
 - If the other reading of exactly one PDF makes the batch match, that reading is used.
 - If a row in one PDF is an exact copy of a row in another PDF, and the batch matches when the copy is removed, the copy is not counted.
@@ -107,7 +107,7 @@ Options of diagnostico.py:
 
 - `PATH` is a single PDF file, or a folder. If it is a folder, the program examines all PDF files in it.
 - `--lineas N` shows no more than N lines of text for each PDF. The default value is 40.
-- `--segunda-lectura` uses the second OCR reading, with a higher resolution and more contrast.
+- `--lectura N` uses OCR reading N: 1 is the normal reading, 2 uses a higher resolution and more contrast, and 3 enlarges and sharpens the image.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
@@ -122,6 +122,8 @@ lotes_auto.py creates the folder `resultados_lotes` inside the folder FOLDER and
 `revisar_a_mano.txt` lists everything that needs a person, in numbered sections: a summary with the three totals and their expected values; a list of actions in the order in which they should be done; the batches that do not match, with every quantity that was found for them, the PDFs without readable quantities that mention them, the skipped `FALTA REVISION` files that mention them, and a note when such a file contains exactly the missing quantity; the batches of the Excel file without any PDF; the quantities whose batch number is not in the Excel file, with the most similar batch of the Excel file; for every PDF without readable quantities, the number of pages, the OCR confidence, the reason, the batches that were seen, the numbers that might be misread batch numbers, the first lines of text and what to do; the PDFs that are marked as bad; the corrections; the suspicious PDFs; the repetitions within a PDF; the same batch and quantity in several PDFs; the skipped files with their quantities for information; and a list of all PDFs with their result.
 
 The files whose name contains `FALTA REVISION` are read only to report what they contain. They never count towards a total.
+
+The folder `paginas` contains an image (PNG) of every page that needs a person: pages without readable quantities, pages with quantities of batches that do not match, suspicious quantities, corrected quantities, quantities with a batch number that is not in the Excel file, and pages of PDFs that are marked as bad. revisar_a_mano.txt names the image next to each problem, so that a page can be checked without opening the PDF. The images cannot be created on FreeBSD, OpenBSD and NetBSD.
 
 `sin_resultado.log` contains, for every PDF that produced no quantity, the reason, the complete text that the program read from it and the decisions that the program made. Look at this file first when a PDF is not read correctly.
 
@@ -162,7 +164,7 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 
 `LOTE_ID` is the pattern for a valid batch number. The default value accepts exactly eight digits that start with `25` or `26`. For example, to also accept batch numbers that start with `24`, change `2[56]` to `2[456]`.
 
-`OCR_DPI` and `OCR_DPI_REINTENTO` are the resolutions of the first and the second OCR reading. `CONFIANZA_MINIMA` is the OCR confidence below which a quantity that is not verified is listed as suspicious.
+`OCR_DPI` is the resolution of the first and the third OCR reading, and `OCR_DPI_REINTENTO` is the resolution of the second OCR reading. The pages are not converted to black and white, because in tests the OCR engine read such pages much worse. `CONFIANZA_MINIMA` is the OCR confidence below which a quantity that is not verified is listed as suspicious.
 
 `PRIORIDAD_RENGLON` decides which quantity row is used in forms in which each column describes one product.
 

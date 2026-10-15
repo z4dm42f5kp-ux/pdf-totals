@@ -283,6 +283,23 @@ def load_ocr():
     raise OCRNoDisponible("; ".join(errores))
 
 
+def preprocesar(img, pasada):
+    """Imagen para el OCR segun la lectura:
+    1: tal cual (300 ppp);
+    2: 400 ppp con mas contraste y nitidez;
+    3: escaneos malos: imagen ampliada al doble y enfocada (300 ppp x 2).
+    No se convierte a blanco y negro: en las pruebas, el OCR (una red neuronal entrenada
+    con imagenes en grises) leia mucho peor las paginas binarizadas."""
+    if pasada <= 1:
+        return img
+    from PIL import Image, ImageFilter, ImageOps
+    gris = ImageOps.autocontrast(img.convert("L"), cutoff=1)
+    if pasada == 2:
+        return gris.filter(ImageFilter.SHARPEN).convert("RGB")
+    gris = gris.resize((gris.width * 2, gris.height * 2), Image.LANCZOS)
+    return gris.filter(ImageFilter.UnsharpMask(radius=2, percent=160, threshold=3)).convert("RGB")
+
+
 def page_tokens(page, pasada=1):
     """Palabras de la pagina con posicion y confianza; fuente 'texto' u 'OCR'."""
     if len(page.chars) >= 20 or (page.chars and not page.images):
@@ -294,13 +311,11 @@ def page_tokens(page, pasada=1):
         _ocr = load_ocr()
     import numpy as np
     try:
-        img = page.to_image(resolution=OCR_DPI if pasada == 1 else OCR_DPI_REINTENTO).original
+        img = page.to_image(resolution=OCR_DPI_REINTENTO if pasada == 2 else OCR_DPI).original
     except ImportError as e:            # sin pypdfium2 (p. ej. BSD) no se puede rasterizar
         raise OCRNoDisponible(str(e)) from e
     img = img.convert("RGB")
-    if pasada > 1:                      # segunda lectura: mas contraste y nitidez
-        from PIL import ImageFilter, ImageOps
-        img = ImageOps.autocontrast(img.convert("L"), cutoff=1).filter(ImageFilter.SHARPEN).convert("RGB")
+    img = preprocesar(img, pasada)
     resultado = list(_ocr(np.array(img)))
     # Inclinacion del escaneo: angulo mediano del borde superior de las cajas de texto.
     import math
@@ -674,8 +689,8 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
     # Numeros fuera de las tablas: posibles totales impresos del documento.
     enteros_doc, dinero_doc, totales_rotulados = [], [], []
     for i, cs in enumerate(celdas):
-        if i in filas_items:
-            continue
+        if i in filas_items or any(c.tipo == "fecha" for c in cs):
+            continue                      # renglones de datos (con fecha) no son totales
         ents = [c.valor for c in cs if c.tipo == "entero"]
         enteros_doc += ents
         dinero_doc += [c.valor for c in cs if c.tipo == "dinero"]
@@ -763,6 +778,9 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
             if all(v is not None and v >= 1_000_000 for v in vals):
                 p -= 5
             conocidos = [v for v in vals if v is not None]
+            if conocidos and max(conocidos) > max(MAX_RETIRADO_POR_LOTE, MAX_NO_DISTRIBUIDA_POR_LOTE):
+                p -= 4
+                por.append("valores mayores que el tope por lote")
             if n >= 3 and len(set(conocidos)) == 1:
                 p -= 2
                 por.append("mismo valor en todos los renglones")
@@ -1009,9 +1027,11 @@ def leer_pdf(ruta, nombre, pasada=1, traza=None):
 
 
 def calidad(L):
+    """Orden para elegir entre lecturas: mas cantidades verificadas, menos fallas, mas
+    cantidades leidas, mas confianza del OCR."""
     ents = [e for e in L.entradas if not e.excluido]
     confs = [e.conf for e in ents] or [0]
-    return (-sum(len(e.fallas) for e in ents), sum(1 for e in ents if e.verificado),
+    return (sum(1 for e in ents if e.verificado), -sum(len(e.fallas) for e in ents),
             len(ents) + len(L.referencias), sum(confs) / len(confs))
 
 
@@ -1221,8 +1241,9 @@ def lote_parecido(a, b):
                              and a[dif[0]] == b[dif[1]] and a[dif[1]] == b[dif[0]])
 
 
-def cambiar_lectura(lecturas, alternativas, f):
-    lecturas[f], alternativas[f] = alternativas[f], lecturas[f]
+def cambiar_lectura(lecturas, alternativas, f, alt):
+    alternativas[f] = [x for x in alternativas[f] if x is not alt] + [lecturas[f]]
+    lecturas[f] = alt
 
 
 def valor_global():
@@ -1250,17 +1271,15 @@ def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correc
         # a) otra lectura de un PDF
         arreglos = []
         for f in archivos:
-            alt = alternativas.get(f)
-            if alt is None or alt is lecturas[f]:
-                continue
-            prueba = dict(lecturas)
-            prueba[f] = alt
-            if cuadra(prueba):
-                arreglos.append(f)
-        if len(arreglos) == 1:
-            f = arreglos[0]
-            cambiar_lectura(lecturas, alternativas, f)
-            correcciones.append(f"lote {lote}: se usa la lectura {lecturas[f].pasada} de {f} "
+            for alt in alternativas.get(f, []):
+                prueba = dict(lecturas)
+                prueba[f] = alt
+                if cuadra(prueba):
+                    arreglos.append((f, alt))
+        if len({f for f, _ in arreglos}) == 1:
+            f, alt = max(arreglos, key=lambda x: calidad(x[1]))
+            cambiar_lectura(lecturas, alternativas, f, alt)
+            correcciones.append(f"lote {lote}: se usa la lectura {alt.pasada} de {f} "
                                 f"(con ella el lote cuadra)")
             continue
         # b) renglon copiado exactamente de otro PDF
@@ -1346,17 +1365,16 @@ def intentar_arreglos(lecturas, alternativas, res, total_esperado, malos, correc
         return
     # c) total global: otra lectura de un solo PDF que haga coincidir el total exacto
     arreglos = []
-    for f, alt in alternativas.items():
-        if alt is lecturas.get(f):
-            continue
-        prueba = dict(lecturas)
-        prueba[f] = alt
-        if medir[0](conciliar(prueba)) == total_esperado:
-            arreglos.append(f)
-    if len(arreglos) == 1:
-        f = arreglos[0]
-        cambiar_lectura(lecturas, alternativas, f)
-        correcciones.append(f"se usa la lectura {lecturas[f].pasada} de {f}: con ella el total coincide "
+    for f, alts in alternativas.items():
+        for alt in alts:
+            prueba = dict(lecturas)
+            prueba[f] = alt
+            if medir[0](conciliar(prueba)) == total_esperado:
+                arreglos.append((f, alt))
+    if len({f for f, _ in arreglos}) == 1:
+        f, alt = max(arreglos, key=lambda x: calidad(x[1]))
+        cambiar_lectura(lecturas, alternativas, f, alt)
+        correcciones.append(f"se usa la lectura {alt.pasada} de {f}: con ella el total coincide "
                             f"exactamente con el esperado ({fmt(total_esperado)})")
         return
     # d) total global: una copia exacta entre PDFs que explique toda la diferencia
@@ -1468,13 +1486,15 @@ def escribir_detalle(ruta, lecturas, res):
 
 
 def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin_resultado, malos,
-                      correcciones, excel, info_omitidos):
+                      correcciones, excel, info_omitidos, imagenes=None, pedidos=None):
     """Archivo para la persona que revisa: todo lo que no cuadra o no se pudo leer, con el
     motivo, lo que si se vio en cada PDF y que hacer."""
     import datetime
     t = []
     raya = "=" * 78
     activas = lambda L: [e for e in L.entradas if not e.excluido]
+    imagenes = imagenes or {}
+    img = lambda f, p: f"   imagen: {imagenes[(f, p)]}" if (f, p) in imagenes else ""
     ret_t, nod_t = sum(res.ret.values()), sum(res.nod.values())
     sin_res = dict(sin_resultado)
     t += [raya, f"REVISION A MANO - lotes_auto.py {VERSION} - {datetime.datetime.now():%d/%m/%Y %H:%M}",
@@ -1578,7 +1598,8 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
             for e in sorted(es, key=lambda e: (e.archivo, e.pagina)):
                 estado = (f"NO SUMADO ({e.excluido})" if e.excluido else
                           "verificado" if e.verificado else f"sin verificar, confianza OCR {e.conf:.2f}")
-                t.append(f"         {fmt(e.piezas):>9}  {e.archivo}  pagina {e.pagina}  [{estado}]")
+                t.append(f"         {fmt(e.piezas):>9}  {e.archivo}  pagina {e.pagina}  [{estado}]"
+                         + img(e.archivo, e.pagina))
         else:
             t.append("      ningun PDF leido tiene este lote")
         if vistos_sin_leer.get(lote):
@@ -1614,7 +1635,8 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
     for e in sorted(fuera, key=lambda e: (e.archivo, e.pagina)):
         parecidos = [l for l in (excel.refs if excel else {}) if lote_parecido(e.lote, l)]
         t.append(f"   {e.archivo}  pagina {e.pagina}: lote {e.lote}  {fmt(e.piezas)} piezas"
-                 + (f"   -> se parece a {', '.join(parecidos)} del Excel" if parecidos else ""))
+                 + (f"   -> se parece a {', '.join(parecidos)} del Excel" if parecidos else "")
+                 + img(e.archivo, e.pagina))
     t.append("")
 
     # 6. PDFs sin cantidades legibles
@@ -1622,6 +1644,9 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
     for i, (f, motivo) in enumerate(sorted(sin_res.items()), 1):
         L = lecturas.get(f)
         t.append(f"   [{i}] {f}")
+        ims = [imagenes[(f, p)] for p in range(1, 4) if (f, p) in imagenes]
+        if ims:
+            t.append(f"       imagenes: {', '.join(ims)}")
         if L is None:
             t.append(f"       motivo: {motivo}")
             t.append("       que hacer: " + ("instalar el OCR y volver a correr, o capturar a mano"
@@ -1658,12 +1683,16 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
     for f, motivos in sorted(malos.items()):
         t.append(f"   {f}")
         t += [f"      - {m}" for m in motivos]
+        ims = sorted(v for (a, p), v in imagenes.items() if a == f)
+        if ims:
+            t.append(f"      imagenes: {', '.join(ims)}")
     t.append("")
     t.append("8. CORRECCIONES APLICADAS (cada una tiene una prueba exacta)")
     corr = list(correcciones)
     for L in lecturas.values():
         for e in L.entradas:
-            corr += [f"{e.archivo} pagina {e.pagina}: {n}" for n in e.notas if n.startswith("CORREGIDO")]
+            corr += [f"{e.archivo} pagina {e.pagina}: {n}" + img(e.archivo, e.pagina)
+                     for n in e.notas if n.startswith("CORREGIDO")]
     t += [f"   {c}" for c in dict.fromkeys(corr)] or ["   ninguna"]
     t.append("")
 
@@ -1684,6 +1713,9 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
     for f, motivos in sospechosos:
         t.append(f"   {f}")
         t += [f"      - {m}" for m in dict.fromkeys(motivos)]
+        ims = sorted(v for (a, p), v in imagenes.items() if a == f)
+        if ims:
+            t.append(f"      imagenes: {', '.join(ims)}")
     t.append("")
 
     # 10-11. Repeticiones y duplicados
@@ -1742,7 +1774,69 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
             estado = "; ".join(partes) + f" [{L.fuente}, {L.paginas} pag.]"
         filas.append(f"   {f}: {estado}")
     t += filas
+    t.append("")
+    t.append(f"14. IMAGENES DE LAS PAGINAS A REVISAR (carpeta paginas): {len(imagenes)}")
+    for (f, p), nombre in sorted(imagenes.items(), key=lambda x: x[1]):
+        t.append(f"   {nombre}   <- {f} pagina {p}: {', '.join((pedidos or {}).get((f, p), []))}")
     pathlib.Path(ruta).write_text("\n".join(t) + "\n", encoding="utf-8")
+
+
+def paginas_a_revisar(lecturas, res, sin_resultado, malos):
+    """(archivo, pagina) -> motivos, para guardar una imagen de cada pagina a revisar."""
+    pedidos = defaultdict(list)
+    sin_res = dict(sin_resultado)
+    for f in sin_res:
+        L = lecturas.get(f)
+        for pag in range(1, min(L.paginas if L else 3, 3) + 1):
+            pedidos[(f, pag)].append("sin cantidades legibles")
+    problemas = {(t, l) for _, t, l, _, _ in res.problemas}
+    for L in lecturas.values():
+        for e in L.entradas:
+            k = (e.archivo, e.pagina)
+            if not e.excluido and (e.tipo, e.lote) in problemas:
+                pedidos[k].append(f"lote {e.lote} no cuadra")
+            if e.excluido == FUERA_EXCEL:
+                pedidos[k].append(f"lote {e.lote} no esta en el Excel")
+            if any(n.startswith("CORREGIDO") for n in e.notas):
+                pedidos[k].append(f"lote {e.lote} corregido")
+            if not e.excluido and (e.fallas or any("dudosa" in n for n in e.notas)
+                                   or (not e.verificado and e.conf < CONFIANZA_MINIMA)):
+                pedidos[k].append(f"lote {e.lote} sospechoso")
+            if e.archivo in malos and (e.fallas or e.excluido.startswith("copia de")):
+                pedidos[k].append("PDF marcado como malo")
+    return {k: list(dict.fromkeys(v)) for k, v in pedidos.items()}
+
+
+def exportar_paginas(carpeta, rutas, pedidos, dpi=110):
+    """Guarda un PNG de cada pagina pedida. Devuelve (archivo, pagina) -> ruta relativa."""
+    carpeta.mkdir(exist_ok=True)
+    for viejo in carpeta.glob("*.png"):
+        viejo.unlink()
+    hechas = {}
+    abiertos = {}
+    try:
+        for n, (f, pag) in enumerate(sorted(pedidos), 1):
+            ruta = rutas.get(f)
+            if ruta is None:
+                continue
+            try:
+                if f not in abiertos:
+                    abiertos[f] = pdfplumber.open(ruta)
+                doc = abiertos[f]
+                if pag > len(doc.pages):
+                    continue
+                base = re.sub(r"[^\w\- ]", "_", pathlib.Path(f).stem)
+                nombre = f"{n:03d}_{base}_p{pag}.png"
+                doc.pages[pag - 1].to_image(resolution=dpi).original.save(carpeta / nombre)
+                hechas[(f, pag)] = f"{carpeta.name}/{nombre}"
+            except ImportError:
+                return hechas               # sin pypdfium2 no se pueden crear imagenes
+            except Exception:
+                continue
+    finally:
+        for d in abiertos.values():
+            d.close()
+    return hechas
 
 
 def ocr_install_hint():
@@ -1864,31 +1958,34 @@ def main(argv=None):
         dudosa(L) or any(e.lote in problema_lotes for e in L.entradas)
         or (hay_que_reintentar and any(not e.verificado for e in L.entradas)))]
     if dudosas and (hay_que_reintentar or any(dudosa(lecturas[f]) for f in dudosas)):
-        print(f"\nSegunda lectura ({OCR_DPI_REINTENTO} ppp, con mas contraste) de {len(dudosas)} PDF(s) dudoso(s)...")
-        for f in dudosas:
-            try:
-                L2 = leer_pdf(rutas[f], f, pasada=2)
-            except Exception as e:
-                print(f"   {f}: {e}")
-                continue
-            alternativas[f] = L2 if calidad(L2) <= calidad(lecturas[f]) else lecturas[f]
-            if calidad(L2) > calidad(lecturas[f]):
-                alternativas[f] = lecturas[f]
-                lecturas[f] = L2
-                print(f"   {f}: se usa la segunda lectura -> {resumen_archivo(L2)}")
+        print(f"\nNuevas lecturas de {len(dudosas)} PDF(s) dudoso(s): {OCR_DPI_REINTENTO} ppp con mas contraste, "
+              "y ampliada al doble y enfocada...")
+        for n, f in enumerate(dudosas, 1):
+            print(f"   [{n}/{len(dudosas)}] {f}", end="", flush=True)
+            lecturas_f = [lecturas[f]]
+            for pasada in (2, 3):
+                try:
+                    lecturas_f.append(leer_pdf(rutas[f], f, pasada=pasada))
+                except Exception as e:
+                    print(f"  (lectura {pasada}: {e})", end="")
+            mejor = max(lecturas_f, key=calidad)
+            alternativas[f] = [x for x in lecturas_f if x is not mejor]
+            lecturas[f] = mejor
+            print(f"  -> se usa la lectura {mejor.pasada}: {resumen_archivo(mejor)}")
     malos, correcciones = {}, []
     res = conciliar(lecturas)
     if res.problemas or (medir is not None and medir[0](res) != medir[1]):
         intentar_arreglos(lecturas, alternativas, res, esperado, malos, correcciones)
         res = conciliar(lecturas)
-    for f, alt in alternativas.items():     # las dos lecturas no coinciden
-        otra = defaultdict(int)
-        for e in alt.entradas:
-            if not e.excluido:
-                otra[(e.tipo, e.lote)] += e.piezas
-        for e in lecturas[f].entradas:
-            if not e.excluido and (e.tipo, e.lote) in otra and otra[(e.tipo, e.lote)] != e.piezas:
-                e.notas.append(f"dudosa: la otra lectura dio {fmt(otra[(e.tipo, e.lote)])}")
+    for f, alts in alternativas.items():    # las lecturas no coinciden
+        for alt in alts:
+            otra = defaultdict(int)
+            for e in alt.entradas:
+                if not e.excluido:
+                    otra[(e.tipo, e.lote)] += e.piezas
+            for e in lecturas[f].entradas:
+                if not e.excluido and (e.tipo, e.lote) in otra and otra[(e.tipo, e.lote)] != e.piezas:
+                    e.notas.append(f"dudosa: la lectura {alt.pasada} dio {fmt(otra[(e.tipo, e.lote)])}")
     for L in lecturas.values():             # lo que coincide con el reporte queda verificado
         for e in L.entradas:
             r = res.refs.get(e.lote)
@@ -1899,8 +1996,8 @@ def main(argv=None):
     for f, L in lecturas.items():           # cifras que contradicen el propio documento
         fallas = sorted({x for e in L.entradas if not e.excluido for x in e.fallas})
         if fallas:
-            alt = alternativas.get(f)
-            if alt is None or any(e.fallas for e in alt.entradas if not e.excluido):
+            alts = alternativas.get(f, [])
+            if all(any(e.fallas for e in alt.entradas if not e.excluido) for alt in alts):
                 malos.setdefault(f, []).extend(f"sus propias cifras no cuadran: {x}" for x in fallas)
 
     for f, L in lecturas.items():
@@ -1919,9 +2016,14 @@ def main(argv=None):
         print(f"\n*** No se pudo guardar {out.name}: esta abierto en Excel. Cierralo y vuelve a correr el script.")
         return 1
     escribir_detalle(salida / "detalle_lotes.txt", lecturas, res)
+    todas_rutas = {str(p.relative_to(folder)): p for p in pdfs}
+    pedidos = paginas_a_revisar(lecturas, res, sin_resultado, malos)
+    imagenes = exportar_paginas(salida / "paginas", todas_rutas, pedidos) if pedidos else {}
+    if pedidos and not imagenes:
+        print("(no se pudieron crear las imagenes de las paginas a revisar en este sistema)")
     rev = salida / "revisar_a_mano.txt"
     escribir_revision(rev, folder, lecturas, res, esperado, omitidos, sin_resultado, malos, correcciones,
-                      _EXCEL, info_omitidos)
+                      _EXCEL, info_omitidos, imagenes, pedidos)
     logf = salida / "sin_resultado.log"
     if log:
         logf.write_text("\n".join(log) + "\n", encoding="utf-8")
@@ -1947,6 +2049,8 @@ def main(argv=None):
     print(f"{len(omitidos)} omitidos por FALTA REVISION | {len(sin_resultado)} sin cantidades legibles")
     print(f"Revision: {rev}")
     print(f"Detalle por lote: {salida / 'detalle_lotes.txt'}")
+    if imagenes:
+        print(f"Imagenes de {len(imagenes)} pagina(s) a revisar: {salida / 'paginas'}")
     print(f"Todos los resultados estan en: {salida}")
     print(f"Excel: {out}")
     return 0

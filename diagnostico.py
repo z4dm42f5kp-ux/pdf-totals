@@ -6,7 +6,7 @@ que tabla y que columna eligio y por que, el tipo de cada cantidad (retirado o n
 distribuida) y las comprobaciones que supero. No modifica ningun archivo.
 
 Uso:
-    python diagnostico.py RUTA [--lineas N] [--segunda-lectura]
+    python diagnostico.py RUTA [--lineas N] [--lectura 1|2|3]
 
 RUTA puede ser un PDF o una carpeta (se revisan todos los PDFs, con subcarpetas).
 """
@@ -73,8 +73,9 @@ def main(argv=None):
     ap.add_argument("ruta", help="un PDF o una carpeta con PDFs")
     ap.add_argument("--lineas", type=int, default=40, metavar="N",
                     help="maximo de renglones de texto a mostrar por PDF (por omision: 40)")
-    ap.add_argument("--segunda-lectura", action="store_true",
-                    help="usar la segunda lectura del OCR (mas resolucion y contraste)")
+    ap.add_argument("--lectura", type=int, choices=(1, 2, 3), default=1,
+                    help="lectura del OCR: 1 normal, 2 mas resolucion y contraste, 3 ampliada y enfocada")
+    ap.add_argument("--segunda-lectura", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--version", action="version", version=f"%(prog)s {la.VERSION}")
     args = ap.parse_args(argv)
 
@@ -88,7 +89,7 @@ def main(argv=None):
         return 2
     print(f"PDFs a revisar: {len(pdfs)}")
     for pdf in pdfs:
-        diagnose(pdf, args.lineas, 2 if args.segunda_lectura else 1)
+        diagnose(pdf, args.lineas, 2 if args.segunda_lectura else args.lectura)
     return 0
 
 

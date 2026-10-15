@@ -7,14 +7,14 @@ Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md
 pdf-totals liest einen Ordner mit PDF-Dokumenten über die Rücknahme eines Produkts vom Markt, wie Rückgabeformulare, Lieferbelege, Warenbelege, Inventarlisten und Rücknahmeberichte. Für jede Chargennummer berechnet es drei Mengen und schreibt sie in eine Excel-Datei:
 
 - die aus dem Markt genommene Menge: Stücke, die zurückgegeben oder vom Markt zurückgewonnen wurden;
-- die nicht verteilte Menge: noch im Bestand befindliche Stücke;
+- die nicht verteilte Menge: Stücke, die sich noch im Bestand befinden, entnommen aus einer Excel-Referenzdatei;
 - die Gesamtmenge für die Zerstörung: die Summe beider.
 
 Das Programm verlässt sich nicht nur auf die Wörter in den Dokumenten. Es untersucht die Struktur jeder Tabelle: welche Spalte ganze Zahlen enthält, welche Spalte multipliziert mit dem Stückpreis den gedruckten Gesamtpreis ergibt und welche Spalte sich zu einer gedruckten Gesamtsumme addiert. In einem Rückzugsbericht findet es die Spalten nach Arithmetik, weil hergestellt minus verteilt gleich nicht verteilt ist, und nicht verteilt plus zurückgezogen gleich der Summe.
 
-Das Programm überprüft dann das Ergebnis. Eine Charge darf `48,042`-Stücke oder `82,090`-Stücke, die nicht verteilt wurden, nicht überschreiten, und die Summe für die Zerstörung muss genau `344,451` sein. Wenn etwas nicht übereinstimmt, werden zweifelhafte gescannte PDFs ein zweites Mal gelesen, Differenzen werden nur dann korrigiert, wenn ein exakter Beweis vorliegt, und PDFs werden nur nach schlüssigen Beweisen als schlecht markiert.
+Die zurückgezogene Menge jeder Charge wird mit der Excel-Referenzdatei verglichen. Keine einzelne Charge darf entfernte `48,042`-Stücke oder nicht verteilte `82,090`-Stücke überschreiten. Die zurückgezogenen Stücke müssen sich zu genau `209,908` addieren, die nicht verteilten Stücke zu genau `134,543` und die Summe für die Zerstörung zu genau `344,451`. Wenn etwas nicht übereinstimmt, werden zweifelhafte gescannte PDFs ein zweites Mal gelesen, Differenzen werden nur dann korrigiert, wenn ein exakter Beweis vorliegt, und PDFs werden nur nach schlüssigen Beweisen als schlecht markiert.
 
-Das Programm liest den Text von PDFs, die Text enthalten, und liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Eine Chargennummer muss genau acht Stellen haben und mit `24`, `25` oder `26` beginnen. Diese Regeln sind leicht zu ändern.
+Das Programm liest den Text von PDFs, die Text enthalten, und liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Eine Chargennummer muss genau acht Ziffern haben und mit `25` oder `26` beginnen. Diese Regeln sind leicht zu ändern.
 
 ## Anforderungen
 

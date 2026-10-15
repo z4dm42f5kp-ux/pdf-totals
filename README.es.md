@@ -7,14 +7,14 @@ Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 pdf-totals lee una carpeta de documentos PDF sobre la retirada de un producto del mercado, como formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote calcula tres cantidades y las escribe a un archivo Excel:
 
 - la cantidad retirada: piezas que fueron devueltas o recuperadas del mercado;
-- la cantidad no distribuida: piezas que aún están en inventario;
+- la cantidad no distribuida: piezas que todavía están en inventario, tomadas de un archivo de referencia Excel;
 - la cantidad total para la destrucción: la suma de ambos.
 
 El programa no depende solamente de las palabras en los documentos. Examina la estructura de cada tabla: que columna contiene números enteros, que columna multiplicada por el precio unitario da el precio total impreso, y que columna suma hasta un total impreso. En un informe de retirada encuentra las columnas por aritmética, porque menos distribuidas no se distribuye, y no distribuidas más retiradas equivale al total.
 
-El programa revisa el resultado. Un lote no debe exceder piezas retiradas `48,042` o piezas `82,090` que no fueron distribuidas, y el total para la destrucción debe ser exactamente `344,451`. Si algo no coincide, los PDF escaneados dudosos son leídos por segunda vez, las diferencias se corren sólo cuando existe una prueba exacta, y los PDF están marcados como malos sólo en pruebas concluyentes.
+La cantidad retirada de cada lote se compara con el archivo de referencia Excel. Ningún lote puede exceder piezas retiradas `48,042` o piezas `82,090` que no fueron distribuidas. Las piezas retiradas deben agregar exactamente a `209,908`, las piezas no distribuidas a exactamente `134,543`, y el total para la destrucción a exactamente `344,451`. Si algo no coincide, los PDF escaneados dudosos son leídos por segunda vez, las diferencias se corren sólo cuando existe una prueba exacta, y los PDF están marcados como malos sólo en pruebas concluyentes.
 
-El programa lee el texto de PDF que contiene texto y lee PDF escaneados con reconocimiento de caracteres ópticos (OCR). Fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `24`, `25` o `26`. Estas reglas son fáciles de cambiar.
+El programa lee el texto de PDF que contiene texto y lee PDF escaneados con reconocimiento de caracteres ópticos (OCR). Fue escrito para documentos sobre productos farmacéuticos devueltos en México. Sus mensajes y archivos de salida están en español. Un número de lote debe tener exactamente ocho dígitos y empezar con `25` o `26`. Estas reglas son fáciles de cambiar.
 
 ## Necesidades
 

@@ -38,7 +38,7 @@ items. Last updated: 2026-10-15, at commit `897e1a5` (lotes_auto.py v2.2.0).
 Standard update-and-run command (replace HASH with the new commit):
 
 ```
-$d="$env:USERPROFILE\pdf-totals"; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/HASH/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/pdf-totals/HASH/diagnostico.py; & "$d\python\python.exe" "$d\lotes_auto.py" --version; & "$d\python\python.exe" "$d\lotes_auto.py" "$d\Franz"
+$d="$env:USERPROFILE\pdf-totals"; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/HASH/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/HASH/diagnostico.py; & "$d\python\python.exe" "$d\lotes_auto.py" --version; & "$d\python\python.exe" "$d\lotes_auto.py" "$d\Franz"
 ```
 
 ---
@@ -113,7 +113,7 @@ are common.
 
 ## 3. Repository and git workflow
 
-- Repo: **github.com/z4dm42f5kp-ux/pdf-totals** (public, MIT). Local clone used so far:
+- Repo: **github.com/z4dm42f5kp-ux/tute-lote** (public, MIT; renamed from `pdf-totals`, GitHub redirects the old URLs). Local clone used so far:
   `/home/claude/pdf-totals`.
 - Files:
   - `lotes_auto.py`: main program, about 2,400 lines, Spanish identifiers and messages.

@@ -1,0 +1,58 @@
+name: Tests
+
+# Checks that examples/ matches tools/make_examples.py, then runs lotes_auto.py on the
+# 120 example PDFs and compares the result with examples/expected.json.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - README.de.md
+      - README.es.md
+      - docs/de/**
+      - docs/es/**
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check with the oldest supported Python (3.9)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: python -m py_compile lotes_auto.py diagnostico.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip uninstall -y opencv-python
+          pip install opencv-python-headless
+
+      - name: pyflakes
+        run: python -m pyflakes lotes_auto.py diagnostico.py tools
+
+      - name: The examples match their generator
+        run: python tools/make_examples.py --check
+
+      - name: lotes_auto.py on the examples
+        run: python tools/check_examples.py
+
+      - name: Keep the output files when the check fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check_examples_output
+          path: check_examples_output/
+          if-no-files-found: ignore

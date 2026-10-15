@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Feeds with the releases and security advisories of the dependencies of tute-lote.
+     Import this file into any RSS or Atom feed reader (most readers have "Import OPML").
+     PyPI feeds: every new release. GitHub feeds: release notes, which name the security fixes.
+     Security advisories for the dependencies arrive as Dependabot alerts and pull requests
+     (.github/dependabot.yml); GitHub offers no feed for them. -->
+<opml version="2.0">
+  <head>
+    <title>tute-lote dependencies</title>
+  </head>
+  <body>
+    <outline text="Python">
+      <outline type="rss" text="Python Insider (Python releases, including security releases)" xmlUrl="https://blog.python.org/feeds/posts/default" htmlUrl="https://www.python.org/news/security/"/>
+    </outline>
+    <outline text="PyPI releases">
+      <outline type="rss" text="pdfplumber releases (PyPI)" xmlUrl="https://pypi.org/rss/project/pdfplumber/releases.xml" htmlUrl="https://pypi.org/project/pdfplumber/"/>
+      <outline type="rss" text="pdfminer.six releases (PyPI)" xmlUrl="https://pypi.org/rss/project/pdfminer.six/releases.xml" htmlUrl="https://pypi.org/project/pdfminer.six/"/>
+      <outline type="rss" text="pypdfium2 releases (PyPI)" xmlUrl="https://pypi.org/rss/project/pypdfium2/releases.xml" htmlUrl="https://pypi.org/project/pypdfium2/"/>
+      <outline type="rss" text="openpyxl releases (PyPI)" xmlUrl="https://pypi.org/rss/project/openpyxl/releases.xml" htmlUrl="https://pypi.org/project/openpyxl/"/>
+      <outline type="rss" text="rapidocr_onnxruntime releases (PyPI)" xmlUrl="https://pypi.org/rss/project/rapidocr_onnxruntime/releases.xml" htmlUrl="https://pypi.org/project/rapidocr_onnxruntime/"/>
+      <outline type="rss" text="onnxruntime releases (PyPI)" xmlUrl="https://pypi.org/rss/project/onnxruntime/releases.xml" htmlUrl="https://pypi.org/project/onnxruntime/"/>
+      <outline type="rss" text="opencv-python releases (PyPI)" xmlUrl="https://pypi.org/rss/project/opencv-python/releases.xml" htmlUrl="https://pypi.org/project/opencv-python/"/>
+      <outline type="rss" text="pillow releases (PyPI)" xmlUrl="https://pypi.org/rss/project/pillow/releases.xml" htmlUrl="https://pypi.org/project/pillow/"/>
+      <outline type="rss" text="numpy releases (PyPI)" xmlUrl="https://pypi.org/rss/project/numpy/releases.xml" htmlUrl="https://pypi.org/project/numpy/"/>
+      <outline type="rss" text="cryptography releases (PyPI)" xmlUrl="https://pypi.org/rss/project/cryptography/releases.xml" htmlUrl="https://pypi.org/project/cryptography/"/>
+    </outline>
+    <outline text="GitHub releases">
+      <outline type="rss" text="pdfplumber releases (GitHub)" xmlUrl="https://github.com/jsvine/pdfplumber/releases.atom" htmlUrl="https://github.com/jsvine/pdfplumber/releases"/>
+      <outline type="rss" text="pdfminer.six releases (GitHub)" xmlUrl="https://github.com/pdfminer/pdfminer.six/releases.atom" htmlUrl="https://github.com/pdfminer/pdfminer.six/releases"/>
+      <outline type="rss" text="pypdfium2 releases (GitHub)" xmlUrl="https://github.com/pypdfium2-team/pypdfium2/releases.atom" htmlUrl="https://github.com/pypdfium2-team/pypdfium2/releases"/>
+      <outline type="rss" text="rapidocr_onnxruntime releases (GitHub)" xmlUrl="https://github.com/RapidAI/RapidOCR/releases.atom" htmlUrl="https://github.com/RapidAI/RapidOCR/releases"/>
+      <outline type="rss" text="onnxruntime releases (GitHub)" xmlUrl="https://github.com/microsoft/onnxruntime/releases.atom" htmlUrl="https://github.com/microsoft/onnxruntime/releases"/>
+      <outline type="rss" text="opencv-python releases (GitHub)" xmlUrl="https://github.com/opencv/opencv-python/releases.atom" htmlUrl="https://github.com/opencv/opencv-python/releases"/>
+      <outline type="rss" text="pillow releases (GitHub)" xmlUrl="https://github.com/python-pillow/Pillow/releases.atom" htmlUrl="https://github.com/python-pillow/Pillow/releases"/>
+      <outline type="rss" text="numpy releases (GitHub)" xmlUrl="https://github.com/numpy/numpy/releases.atom" htmlUrl="https://github.com/numpy/numpy/releases"/>
+      <outline type="rss" text="cryptography releases (GitHub)" xmlUrl="https://github.com/pyca/cryptography/releases.atom" htmlUrl="https://github.com/pyca/cryptography/releases"/>
+      <outline type="rss" text="tute-lote releases" xmlUrl="https://github.com/z4dm42f5kp-ux/tute-lote/releases.atom" htmlUrl="https://github.com/z4dm42f5kp-ux/tute-lote/releases"/>
+    </outline>
+  </body>
+</opml>

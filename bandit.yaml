@@ -1,0 +1,18 @@
+# Configuration of the bandit security analyser (used by .github/workflows/security.yml).
+# Run: bandit -c bandit.yaml -r lotes_auto.py diagnostico.py tools
+# Each skipped check was reviewed. The reasons:
+skips:
+  # try/except/pass and try/except/continue: deliberate fallbacks (optional features such
+  # as cv2 threads, closing files, a damaged cache file is read again, one unreadable PDF
+  # must not stop the run). Errors that matter are reported in revisar_a_mano.txt.
+  - B110
+  - B112
+  # SHA-1 is used only as a fingerprint of a PDF for the name of its cache file
+  # (huella_pdf in lotes_auto.py), not for security.
+  - B324
+  # random is used only to create the invented example documents (tools/make_examples.py).
+  - B311
+  # subprocess is used only by tools/check_examples.py, with a fixed argument list and
+  # without a shell, to run lotes_auto.py.
+  - B404
+  - B603

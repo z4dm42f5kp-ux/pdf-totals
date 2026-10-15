@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 venv/
 python/
+examples/resultados_lotes/
+check_examples_output/
+check_examples.log

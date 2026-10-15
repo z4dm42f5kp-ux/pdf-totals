@@ -1,0 +1,38 @@
+name: Security checks
+
+# pip-audit: known vulnerabilities in the dependencies (requirements.txt).
+# bandit: static security analysis of the Python code (configuration in bandit.yaml).
+# pyflakes: undefined names, unused imports and similar errors.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the checkers
+        run: pip install pip-audit bandit pyflakes
+
+      - name: pip-audit
+        run: pip-audit -r requirements.txt
+
+      - name: bandit
+        run: bandit -c bandit.yaml -r lotes_auto.py diagnostico.py tools
+
+      - name: pyflakes
+        run: python -m pyflakes lotes_auto.py diagnostico.py tools

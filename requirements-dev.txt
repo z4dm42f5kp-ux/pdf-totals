@@ -1,0 +1,8 @@
+# Extra packages for the tests and the example generator (tools/make_examples.py).
+# The versions are pinned because "make_examples.py --check" compares files byte by
+# byte, and another version of reportlab, Pillow or pypdfium2 can write other bytes.
+-r requirements.txt
+reportlab==5.0.1
+pillow==12.3.0
+pypdfium2==5.14.0
+pyflakes==4.0.3

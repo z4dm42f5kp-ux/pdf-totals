@@ -1,0 +1,87 @@
+name: Release
+
+# Runs when a version tag is pushed, for example v3.0.0 or v2.3.0. See RELEASES.txt.
+# - vN.0.x (minor version 0) is a stable release: marked as the latest release.
+# - vN.M.x with M > 0 is a rolling release: marked as a prerelease.
+# The release contains the two scripts, requirements.txt, a zip file and SHA256SUMS.
+# A container image is published to GitHub Packages (ghcr.io).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag against VERSION in lotes_auto.py
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(python3 -c "import re; print(re.search(r'^VERSION = \"([^\"]+)\"', open('lotes_auto.py').read(), re.M).group(1))")
+          if [ "$tag" != "$version" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match VERSION = $version in lotes_auto.py."
+            exit 1
+          fi
+          minor=$(echo "$version" | cut -d. -f2)
+          if [ "$minor" = "0" ]; then channel=stable; else channel=rolling; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "Version $version, channel $channel"
+
+      - name: Build the release files
+        run: |
+          mkdir dist
+          cp lotes_auto.py diagnostico.py requirements.txt dist/
+          zip -j "dist/tute-lote-${{ steps.version.outputs.version }}.zip" lotes_auto.py diagnostico.py requirements.txt README.md LICENSE
+          cd dist && sha256sum lotes_auto.py diagnostico.py requirements.txt *.zip > SHA256SUMS && cat SHA256SUMS
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.version.outputs.channel }}" = "stable" ]; then
+            flags="--latest"
+          else
+            flags="--prerelease --latest=false"
+          fi
+          title="tute-lote ${{ steps.version.outputs.version }} (${{ steps.version.outputs.channel }})"
+          notes="Channel: ${{ steps.version.outputs.channel }}. See RELEASES.txt. Check the files with SHA256SUMS."
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # The release was created on the GitHub website together with the tag.
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release edit "$GITHUB_REF_NAME" $flags --title "$title"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* $flags --title "$title" --notes "$notes"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Image names
+        id: image
+        run: |
+          image="ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          tags="$image:${{ steps.version.outputs.version }},$image:${{ steps.version.outputs.channel }}"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=MIT

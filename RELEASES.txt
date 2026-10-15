@@ -1,0 +1,129 @@
+RELEASES OF TUTE-LOTE
+=====================
+
+This file describes how releases of tute-lote are made and published, and how to
+download them.
+
+
+1. Version numbers and channels
+-------------------------------
+
+The version number is VERSION at the beginning of lotes_auto.py. It has the form
+MAJOR.MINOR.PATCH, for example 3.0.0 or 2.3.1.
+
+There are two channels:
+
+  stable    MINOR is 0: 1.0.0, 2.0.0, 3.0.0 ...
+            A stable release is tested on the example documents and on real
+            documents. It is marked as the "latest release" on GitHub, and its
+            container image has the tag "stable".
+
+  rolling   MINOR is greater than 0: 2.1.0, 2.2.0, 2.3.0 ...
+            A rolling release contains the newest changes. It is tested on the
+            example documents. It is marked as a "pre-release" on GitHub, and its
+            container image has the tag "rolling".
+
+PATCH is increased for a fix that changes nothing else, for example 3.0.1 after
+3.0.0. A patch of a stable release stays stable; a patch of a rolling release stays
+rolling.
+
+The next stable release after 2.2.0 is 3.0.0. Between two stable releases, any
+number of rolling releases can be made.
+
+
+2. What a release contains
+--------------------------
+
+Every release on the Releases page of the repository
+(https://github.com/z4dm42f5kp-ux/tute-lote/releases) contains:
+
+  lotes_auto.py               the program
+  diagnostico.py              the diagnostic tool
+  requirements.txt            the tested versions of the Python packages
+  tute-lote-VERSION.zip       the files above, README.md and LICENSE
+  SHA256SUMS                  the SHA-256 checksums of the files above
+
+In addition, a container image is published to GitHub Packages:
+
+  ghcr.io/z4dm42f5kp-ux/tute-lote:VERSION   for example :3.0.0
+  ghcr.io/z4dm42f5kp-ux/tute-lote:stable    the newest stable release
+  ghcr.io/z4dm42f5kp-ux/tute-lote:rolling   the newest rolling release
+
+GitHub Packages has no registry for Python scripts, so the scripts are published as
+files of the release and the container image is published to the container
+registry of GitHub Packages.
+
+
+3. How to make a release
+------------------------
+
+A release is made by the owner of the repository. The workflow
+.github/workflows/release.yml does the rest.
+
+  1. Make sure that the tests pass on main: the workflows "Tests" and "Security
+     checks" must be green (Actions tab).
+
+  2. For a stable release, also run the program on real documents and compare the
+     totals with the expected totals.
+
+  3. Change VERSION in lotes_auto.py to the new version, for example
+     VERSION = "3.0.0". Commit the change to main.
+
+  4. Create the tag. The tag is "v" followed by VERSION, exactly:
+
+       git tag v3.0.0
+       git push origin v3.0.0
+
+     Without git on the command line: on GitHub, open Releases, then "Draft a new
+     release", type v3.0.0 into "Choose a tag", choose "Create new tag on publish"
+     with the target main, and click "Publish release". The workflow then adds the
+     files described above to the release and marks it as stable or rolling.
+
+  5. The workflow checks that the tag matches VERSION. If it does not match, the
+     workflow stops and nothing is published. Otherwise it creates the release
+     with the files and the checksums, marks it as stable or rolling, and
+     publishes the container image.
+
+  6. Check the release on the Releases page and the image under Packages.
+
+A release that was published by mistake can be deleted on the Releases page. Delete
+the tag as well (git push origin :refs/tags/v3.0.0), and the container image under
+Packages.
+
+
+4. How to download a release
+----------------------------
+
+Always download a specific version, not "main", so that you know which version you
+run.
+
+Windows PowerShell, for version 3.0.0 (replace the version and the folder):
+
+  $v="3.0.0"; $d="$env:USERPROFILE\tute-lote"; curl.exe -L -o "$d\lotes_auto.py" "https://github.com/z4dm42f5kp-ux/tute-lote/releases/download/v$v/lotes_auto.py"; curl.exe -L -o "$d\diagnostico.py" "https://github.com/z4dm42f5kp-ux/tute-lote/releases/download/v$v/diagnostico.py"; curl.exe -L -o "$d\SHA256SUMS" "https://github.com/z4dm42f5kp-ux/tute-lote/releases/download/v$v/SHA256SUMS"; Get-FileHash "$d\lotes_auto.py","$d\diagnostico.py" -Algorithm SHA256; Get-Content "$d\SHA256SUMS"; & "$d\python\python.exe" "$d\lotes_auto.py" --version
+
+  Compare the hashes that Get-FileHash shows with the lines in SHA256SUMS. They
+  must be equal (Get-FileHash shows them in capital letters).
+
+macOS and Linux:
+
+  v=3.0.0; cd ~/tute-lote && for f in lotes_auto.py diagnostico.py SHA256SUMS; do curl -LO "https://github.com/z4dm42f5kp-ux/tute-lote/releases/download/v$v/$f"; done && sha256sum -c --ignore-missing SHA256SUMS && venv/bin/python lotes_auto.py --version
+
+  On macOS, use "shasum -a 256 -c --ignore-missing SHA256SUMS" instead of
+  sha256sum.
+
+Container (Linux, macOS, Windows with Podman or Docker):
+
+  podman run --rm --network none -v /path/to/pdfs:/data:Z ghcr.io/z4dm42f5kp-ux/tute-lote:stable /data
+
+Installations made before the project was renamed use the folder pdf-totals
+instead of tute-lote.
+
+
+5. Dependency updates
+---------------------
+
+Dependabot proposes updates of the packages in requirements.txt and
+requirements-dev.txt every week. An update of reportlab, Pillow or pypdfium2 can
+change the bytes of the example documents. In that case the workflow "Tests"
+reports that examples/ is out of date: run "python tools/make_examples.py" with
+the new versions and commit the result together with the update.

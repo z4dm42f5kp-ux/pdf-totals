@@ -1,4 +1,4 @@
-# pdf-totals manual
+# tute-lote manual
 
 ## Name
 
@@ -190,14 +190,14 @@ The program needs Python and the Python packages pdfplumber and openpyxl. To rea
 
 No OCR engine is available for FreeBSD, OpenBSD, NetBSD or Alpine Linux. On these systems, the program reads only PDFs that contain text.
 
-The following instructions put everything into a folder with the name `pdf-totals` in your home folder. The Python packages are installed into a private Python environment in `pdf-totals/venv`, or in `pdf-totals\python` on Windows. Nothing is installed for the whole system, except Python itself where this is stated.
+The following instructions put everything into a folder with the name `tute-lote` in your home folder. The Python packages are installed into a private Python environment in `tute-lote/venv`, or in `tute-lote\python` on Windows. Nothing is installed for the whole system, except Python itself where this is stated.
 
 ### Windows 10 and Windows 11
 
 You do not need administrator rights. Open PowerShell and run the following command. The command downloads the embeddable distribution of `Python 3.12` from python.org into your user folder. It then installs pip and the required packages, and downloads the two scripts. Windows PowerShell 5.1 does not support the `&&` operator, so the steps are separated with the `;` character.
 
 ```
-$d="$env:USERPROFILE\pdf-totals"; New-Item -ItemType Directory -Force "$d\python" | Out-Null; Invoke-WebRequest -UseBasicParsing https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile "$env:TEMP\py-embed.zip"; Expand-Archive -Force "$env:TEMP\py-embed.zip" "$d\python"; (Get-Content "$d\python\python312._pth") -replace '^#\s*import site','import site' | Set-Content "$d\python\python312._pth"; Invoke-WebRequest -UseBasicParsing https://bootstrap.pypa.io/get-pip.py -OutFile "$d\python\get-pip.py"; & "$d\python\python.exe" "$d\python\get-pip.py" --no-warn-script-location; & "$d\python\python.exe" -m pip install pdfplumber openpyxl rapidocr_onnxruntime msvc-runtime; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+$d="$env:USERPROFILE\tute-lote"; New-Item -ItemType Directory -Force "$d\python" | Out-Null; Invoke-WebRequest -UseBasicParsing https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip -OutFile "$env:TEMP\py-embed.zip"; Expand-Archive -Force "$env:TEMP\py-embed.zip" "$d\python"; (Get-Content "$d\python\python312._pth") -replace '^#\s*import site','import site' | Set-Content "$d\python\python312._pth"; Invoke-WebRequest -UseBasicParsing https://bootstrap.pypa.io/get-pip.py -OutFile "$d\python\get-pip.py"; & "$d\python\python.exe" "$d\python\get-pip.py" --no-warn-script-location; & "$d\python\python.exe" -m pip install pdfplumber openpyxl rapidocr_onnxruntime msvc-runtime; curl.exe -L -o "$d\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$d\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 The package msvc-runtime copies the Microsoft Visual C++ runtime files into the Python folder. The OCR engine needs these files, and some systems do not have them. You can ignore the pip warnings about scripts that are installed in a folder that is not on PATH.
@@ -207,7 +207,7 @@ Use `curl.exe` and not `curl`. In Windows PowerShell 5.1, `curl` is another name
 To run the program:
 
 ```
-& "$env:USERPROFILE\pdf-totals\python\python.exe" "$env:USERPROFILE\pdf-totals\lotes_auto.py" "C:\path\to\pdfs"
+& "$env:USERPROFILE\tute-lote\python\python.exe" "$env:USERPROFILE\tute-lote\lotes_auto.py" "C:\path\to\pdfs"
 ```
 
 If downloads are blocked on the computer, download the files `python-3.12.10-embed-amd64.zip` and `get-pip.py` on another computer. Copy them into the Downloads folder. Then replace the two `Invoke-WebRequest` steps in the command with the paths of these files.
@@ -219,7 +219,7 @@ These instructions are for 64-bit processors from Intel and AMD. For Windows on 
 You need administrator rights only to install Python. Install `Python 3.12` with the installer from python.org (https://www.python.org/downloads/macos/) or with Homebrew (`brew install python@3.12`). Then run the following command in the Terminal application:
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 If you use Homebrew and the command `python3.12` is not found, use `$(brew --prefix)/bin/python3.12` instead. Macs with Intel processors and Macs with Apple processors are both supported.
@@ -227,7 +227,7 @@ If you use Homebrew and the command `python3.12` is not found, use `$(brew --pre
 To run the program:
 
 ```
-~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
+~/tute-lote/venv/bin/python ~/tute-lote/lotes_auto.py /path/to/pdfs
 ```
 
 ### Linux
@@ -237,13 +237,13 @@ On Linux, the OCR engine is installed with the package opencv-python-headless in
 When `Python 3.12` is available as the command `python3.12`, the following command creates the environment on every distribution. On Debian 12, use the command `python3` instead, which is `Python 3.11`.
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && venv/bin/pip uninstall -y opencv-python && venv/bin/pip install opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && venv/bin/pip uninstall -y opencv-python && venv/bin/pip install opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 To run the program:
 
 ```
-~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
+~/tute-lote/venv/bin/python ~/tute-lote/lotes_auto.py /path/to/pdfs
 ```
 
 The following paragraphs explain how to get `Python 3.12` on common Linux distributions.
@@ -273,13 +273,13 @@ Arch Linux offers only the newest version of Python. Use the method with uv that
 On every Linux distribution that uses glibc, you can use uv and do not need the root user. uv is a single program. It is installed into your home folder and can download a private copy of `Python 3.12`.
 
 ```
-curl -LsSf https://astral.sh/uv/install.sh | sh && mkdir -p ~/pdf-totals && cd ~/pdf-totals && ~/.local/bin/uv venv -p 3.12 venv && ~/.local/bin/uv pip install -p venv/bin/python pdfplumber openpyxl rapidocr_onnxruntime && ~/.local/bin/uv pip uninstall -p venv/bin/python opencv-python && ~/.local/bin/uv pip install -p venv/bin/python opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+curl -LsSf https://astral.sh/uv/install.sh | sh && mkdir -p ~/tute-lote && cd ~/tute-lote && ~/.local/bin/uv venv -p 3.12 venv && ~/.local/bin/uv pip install -p venv/bin/python pdfplumber openpyxl rapidocr_onnxruntime && ~/.local/bin/uv pip uninstall -p venv/bin/python opencv-python && ~/.local/bin/uv pip install -p venv/bin/python opencv-python-headless && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 Alpine Linux uses the C library musl. No OCR engine is available for musl, so the program reads only PDFs that contain text:
 
 ```
-doas apk add python3 curl && mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3 -m venv venv && venv/bin/pip install pdfplumber openpyxl && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+doas apk add python3 curl && mkdir -p ~/tute-lote && cd ~/tute-lote && python3 -m venv venv && venv/bin/pip install pdfplumber openpyxl && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 If your Alpine Linux system uses `sudo` instead of `doas`, replace `doas` with `sudo`.
@@ -297,7 +297,7 @@ pkg install py311-pip py311-cryptography
 ```
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 The package names contain the version of Python, which is `311` in this example. If your system uses another version, find the correct names with the command `pkg search cryptography`. Then use the matching command instead of `python3.11`, for example `python3.12`.
@@ -309,7 +309,7 @@ doas pkg_add py3-pip py3-cryptography
 ```
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 On NetBSD, run the first command as the root user:
@@ -319,7 +319,7 @@ pkgin install py312-pip py312-cryptography
 ```
 
 ```
-mkdir -p ~/pdf-totals && cd ~/pdf-totals && python3.12 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && ftp https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 As on FreeBSD, the package names contain the version of Python, which is `312` in this example. Find the correct names on your system with the command `pkgin search cryptography`.
@@ -327,7 +327,7 @@ As on FreeBSD, the package names contain the version of Python, which is `312` i
 To run the program on FreeBSD, OpenBSD or NetBSD:
 
 ```
-~/pdf-totals/venv/bin/python ~/pdf-totals/lotes_auto.py /path/to/pdfs
+~/tute-lote/venv/bin/python ~/tute-lote/lotes_auto.py /path/to/pdfs
 ```
 
 ## Updating
@@ -335,16 +335,18 @@ To run the program on FreeBSD, OpenBSD or NetBSD:
 To update the program, download the two scripts again. On Windows:
 
 ```
-curl.exe -L -o "$env:USERPROFILE\pdf-totals\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$env:USERPROFILE\pdf-totals\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+curl.exe -L -o "$env:USERPROFILE\tute-lote\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$env:USERPROFILE\tute-lote\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 On macOS and Linux:
 
 ```
-cd ~/pdf-totals && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
+cd ~/tute-lote && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
 On FreeBSD, use `fetch` in the same way. On OpenBSD and NetBSD, use `ftp`.
+
+The project was called pdf-totals before. Installations that were made before the new name use the folder `pdf-totals` instead of `tute-lote`. They keep working: replace `tute-lote` with `pdf-totals` in the folder paths of the commands above, but not in the addresses.
 
 After a change, GitHub can deliver the previous version for a few minutes. To get a specific version immediately, replace `main` in the address with the identifier of the commit.
 
@@ -381,9 +383,18 @@ The program expects quantities to be whole numbers of pieces. It does not conver
 
 - lotes_auto.py is the program.
 - diagnostico.py is the diagnostic tool. It must be in the same folder as lotes_auto.py.
+- requirements.txt lists the tested versions of the required Python packages. requirements-dev.txt adds the packages for the tests and for the example documents.
 - README.md is a short description. It is also available as README.de.md and README.es.md.
-- The folder `docs` contains this manual in English, German and Spanish.
-- `tools/translate_docs.py` is the script that translates the documentation.
+- The folder `docs` contains this manual in English, German and Spanish, the logo, and the file `security-feeds.opml`. This file is a list of feeds with the releases of every Python package that the program uses. Import it into a feed reader to follow the updates.
+- The folder `examples` contains 120 invented PDF documents, a reference Excel file and the expected result in `expected.json`. See `examples/README.md`.
+- `tools/make_examples.py` creates the example documents. `tools/check_examples.py` runs the program on them and compares the result with the expected result.
+- `tools/make_logo.py` draws the logo. `tools/translate_docs.py` translates the documentation.
+- `AGENTS.md` contains the rules for AI agents that run, test or change the program.
+- `SECURITY.md` describes how to report a vulnerability, and the security model.
+- `RELEASES.txt` describes the stable and rolling releases, how they are made and how to download them.
+- `Dockerfile` describes the container image that is published with every release.
+- `bandit.yaml` is the configuration of the security analyser bandit.
+- The folder `.github` contains the automatic workflows: translation, tests, security checks, releases and dependency updates.
 - `LICENSE` contains the text of the license.
 
 ## License

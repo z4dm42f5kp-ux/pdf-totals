@@ -321,7 +321,7 @@ The Excel file cannot be saved. The program stops with return code 1 when totale
 
 The total does not match the expected total. Open revisar_a_mano.txt. The section about batches that do not match shows which batches exceed a limit or differ from the withdrawal report, and which PDFs contribute to them. Then search for these batches in detalle_lotes.txt. Common causes are:
 
-- A PDF that belongs to the recall is missing from the folder, or is named `FALTA REVISION`.
+- A PDF that belongs to the withdrawal is missing from the folder, or is named `FALTA REVISION`.
 - The OCR read a digit wrongly. The two readings of a PDF are compared, and a difference between them is noted as `dudosa`.
 - The same document is in the folder twice under different names.
 - The program used the wrong column for the quantity, because the document uses a layout that the program does not know. Run diagnostico.py with this PDF to see which column was chosen and why.

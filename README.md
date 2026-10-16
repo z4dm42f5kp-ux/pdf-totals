@@ -1,7 +1,5 @@
 # tute-lote
 
-![tute-lote logo](docs/logo.svg)
-
 Languages: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
 tute-lote reads a folder of PDF documents about the withdrawal of a product from the market, such as return forms, delivery receipts, goods receipts, inventory lists and withdrawal reports. For each batch number it calculates three quantities and writes them to an Excel file:

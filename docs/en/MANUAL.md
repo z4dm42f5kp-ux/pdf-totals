@@ -385,10 +385,10 @@ The program expects quantities to be whole numbers of pieces. It does not conver
 - diagnostico.py is the diagnostic tool. It must be in the same folder as lotes_auto.py.
 - requirements.txt lists the tested versions of the required Python packages. requirements-dev.txt adds the packages for the tests and for the example documents.
 - README.md is a short description. It is also available as README.de.md and README.es.md.
-- The folder `docs` contains this manual in English, German and Spanish, the logo, and the file `security-feeds.opml`. This file is a list of feeds with the releases of every Python package that the program uses. Import it into a feed reader to follow the updates.
+- The folder `docs` contains this manual in English, German and Spanish, and the file `security-feeds.opml`. This file is a list of feeds with the releases of every Python package that the program uses. Import it into a feed reader to follow the updates.
 - The folder `examples` contains 120 invented PDF documents, a reference Excel file and the expected result in `expected.json`. See `examples/README.md`.
 - `tools/make_examples.py` creates the example documents. `tools/check_examples.py` runs the program on them and compares the result with the expected result.
-- `tools/make_logo.py` draws the logo. `tools/translate_docs.py` translates the documentation.
+- `tools/translate_docs.py` translates the documentation.
 - `AGENTS.md` contains the rules for AI agents that run, test or change the program.
 - `SECURITY.md` describes how to report a vulnerability, and the security model.
 - `RELEASES.txt` describes the stable and rolling releases, how they are made and how to download them.

@@ -139,7 +139,6 @@ are common.
     `tools/make_examples.py` (deterministic: fixed seed, reportlab `invariant=1`, fixed
     PIL/openpyxl dates; `--check` regenerates and compares byte by byte).
     `tools/check_examples.py` runs lotes_auto on a temp copy and compares every lote.
-  - `tools/make_logo.py` draws `docs/logo.svg` (stdlib) and `docs/logo.png` (Pillow).
   - `docs/security-feeds.opml`: RSS/Atom feeds of the dependencies' releases.
   - Workflows: `translate-docs.yml`, `tests.yml` (py_compile 3.9, pyflakes, examples
     `--check`, check_examples with OCR), `security.yml` (pip-audit, bandit, pyflakes;
@@ -162,7 +161,7 @@ Recent history:
 
 | Commit | Change |
 |---|---|
-| (2026-10-15) | issues #1 #2 #3 #4 #6 #7 #9: rename docs to tute-lote, AGENTS.md, SECURITY.md, examples + CI tests, security CI + feeds, release process, logo. lotes_auto.py unchanged (2.2.0) |
+| (2026-10-15) | issues #1 #2 #3 #4 #6 #7 #9: rename docs to tute-lote, AGENTS.md, SECURITY.md, examples + CI tests, security CI + feeds, release process, logo (removed 2026-10-16 at the user's request). lotes_auto.py unchanged (2.2.0) |
 | 897e1a5 | v2.2: speed (parallel processes, cache, targeted re-reads, image cap, watchdog) |
 | a022f0e | third OCR reading, page images, safer choice of reading |
 | 7c615f3 | Excel name lookup, resultados_lotes folder |

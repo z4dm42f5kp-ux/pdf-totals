@@ -387,10 +387,10 @@ El programa espera que las cantidades sean números enteros de piezas. No convie
 - diagnostico.py es la herramienta de diagnóstico. Debe estar en la misma carpeta que lotes_auto.py.
 - requirements.txt enumera las versiones probadas de los paquetes Python requeridos. requirements-dev.txt añade los paquetes para las pruebas y para los documentos de ejemplo.
 - README.md es una descripción corta. También está disponible como README.de.md y README.es.md.
-- La carpeta `docs` contiene este manual en inglés, alemán y español, el logotipo y el archivo `security-feeds.opml`. Este archivo es una lista de feeds con las versiones de cada paquete Python que utiliza el programa. Importarlo en un lector de alimentación para seguir las actualizaciones.
+- La carpeta `docs` contiene este manual en inglés, alemán y español, y el archivo `security-feeds.opml`. Este archivo es una lista de feeds con las versiones de cada paquete Python que utiliza el programa. Importarlo en un lector de alimentación para seguir las actualizaciones.
 - La carpeta `examples` contiene 120 documentos PDF inventados, un archivo de referencia Excel y el resultado esperado en `expected.json`. Ver `examples/README.md`.
 - `tools/make_examples.py` crea los documentos de ejemplo. `tools/check_examples.py` ejecuta el programa en ellos y compara el resultado con el resultado esperado.
-- `tools/make_logo.py` dibuja el logo. `tools/translate_docs.py` traduce la documentación.
+- `tools/translate_docs.py` traduce la documentación.
 - `AGENTS.md` contiene las reglas para los agentes de IA que ejecutan, prueban o cambian el programa.
 - `SECURITY.md` describe cómo reportar una vulnerabilidad, y el modelo de seguridad.
 - `RELEASES.txt` describe los lanzamientos estables y de rodaje, cómo se hacen y cómo descargarlos.

@@ -2,8 +2,6 @@
 
 Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
-![tute-lote logo](docs/logo.svg)
-
 Idiomas: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
 tute-lote lee una carpeta de documentos PDF sobre la retirada de un producto del mercado, como formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote calcula tres cantidades y las escribe a un archivo Excel:

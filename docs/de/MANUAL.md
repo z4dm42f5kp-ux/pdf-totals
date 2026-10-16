@@ -387,10 +387,10 @@ Das Programm erwartet, dass Mengen ganze Stückzahlen sind. Es konvertiert keine
 - diagnostico.py ist das Diagnosewerkzeug. Es muss sich im gleichen Ordner wie lotes_auto.py befinden.
 - requirements.txt listet die getesteten Versionen der erforderlichen Python-Pakete auf. requirements-dev.txt fügt die Pakete für die Tests und für die Beispieldokumente hinzu.
 - README.md ist eine kurze Beschreibung. Es ist auch als README.de.md und README.es.md verfügbar.
-- Der Ordner `docs` enthält dieses Handbuch in Englisch, Deutsch und Spanisch, das Logo und die Datei `security-feeds.opml`. Diese Datei ist eine Liste von Feeds mit den Veröffentlichungen jedes Python-Pakets, das das Programm verwendet. Importieren Sie es in einen Feed-Reader, um den Updates zu folgen.
+- Der Ordner `docs` enthält dieses Handbuch in Englisch, Deutsch und Spanisch sowie die Datei `security-feeds.opml`. Diese Datei ist eine Liste von Feeds mit den Veröffentlichungen jedes Python-Pakets, das das Programm verwendet. Importieren Sie es in einen Feed-Reader, um den Updates zu folgen.
 - Der Ordner `examples` enthält 120 erfundene PDF-Dokumente, eine Excel-Referenzdatei und das erwartete Ergebnis in `expected.json`. Siehe `examples/README.md`.
 - `tools/make_examples.py` erstellt die Beispieldokumente. `tools/check_examples.py` führt das Programm auf ihnen aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis.
-- `tools/make_logo.py` zeichnet das Logo. `tools/translate_docs.py` übersetzt die Dokumentation.
+- `tools/translate_docs.py` übersetzt die Dokumentation.
 - `AGENTS.md` enthält die Regeln für KI-Agenten, die das Programm ausführen, testen oder ändern.
 - `SECURITY.md` beschreibt, wie eine Schwachstelle gemeldet wird, und das Sicherheitsmodell.
 - `RELEASES.txt` beschreibt die stabilen und rollenden Releases, wie sie erstellt werden und wie sie heruntergeladen werden können.

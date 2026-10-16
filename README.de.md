@@ -2,8 +2,6 @@
 
 Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate übersetzt. Wenn es sich vom englischen Original unterscheidet, gilt das englische Original.
 
-![tute-lote logo](docs/logo.svg)
-
 Sprachen: [English](README.md), [Deutsch](README.de.md), [Español](README.es.md)
 
 tute-lote liest einen Ordner mit PDF-Dokumenten über die Rücknahme eines Produkts vom Markt, wie Rückgabeformulare, Lieferbelege, Warenbelege, Inventarlisten und Rücknahmeberichte. Für jede Chargennummer berechnet es drei Mengen und schreibt sie in eine Excel-Datei:

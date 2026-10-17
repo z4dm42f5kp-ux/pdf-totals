@@ -1,7 +1,8 @@
 name: Tests
 
-# Checks that examples/ matches tools/make_examples.py, then runs lotes_auto.py on the
-# 120 example PDFs and compares the result with examples/expected.json.
+# Checks that examples/ matches tools/make_examples.py, then runs lotes_auto.py and the
+# pipeline in etapas/ on the 120 example PDFs and compares the result with
+# examples/expected.json. Then checks the profiles for other countries and sectors.
 
 on:
   push:
@@ -28,7 +29,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
-      - run: python -m py_compile lotes_auto.py diagnostico.py
+      - run: python -m py_compile lotes_auto.py diagnostico.py etapas/*.py tools/check_profiles.py
 
       - uses: actions/setup-python@v5
         with:
@@ -41,13 +42,16 @@ jobs:
           pip install opencv-python-headless
 
       - name: pyflakes
-        run: python -m pyflakes lotes_auto.py diagnostico.py tools
+        run: python -m pyflakes lotes_auto.py diagnostico.py tools etapas
 
       - name: The examples match their generator
         run: python tools/make_examples.py --check
 
-      - name: lotes_auto.py on the examples
+      - name: lotes_auto.py and the pipeline in etapas/ on the examples
         run: python tools/check_examples.py
+
+      - name: Profiles for other countries, languages and sectors
+        run: python tools/check_profiles.py
 
       - name: Keep the output files when the check fails
         if: failure()

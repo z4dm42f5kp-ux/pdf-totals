@@ -6,7 +6,8 @@ que tabla y que columna eligio y por que, el tipo de cada cantidad (retirado o n
 distribuida) y las comprobaciones que supero. No modifica ningun archivo.
 
 Uso:
-    python diagnostico.py RUTA [--lineas N] [--lectura 1|2|3]
+    python diagnostico.py RUTA [--lineas N] [--lectura 1|2|3] [--perfil P] [--sector S]
+                          [--config RUTA] [--excel RUTA]
 
 RUTA puede ser un PDF o una carpeta (se revisan todos los PDFs, con subcarpetas).
 """
@@ -79,6 +80,13 @@ def main(argv=None):
     ap.add_argument("--lectura", type=int, choices=(1, 2, 3), default=1,
                     help="lectura del OCR: 1 normal, 2 mas resolucion y contraste, 3 ampliada y enfocada")
     ap.add_argument("--segunda-lectura", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--perfil", choices=list(la.PERFILES), default=None,
+                    help=f"pais o idioma de los documentos (por omision: {la.PERFIL_PREDETERMINADO})")
+    ap.add_argument("--sector", choices=list(la.SECTORES), default=None, help="sector de los productos")
+    ap.add_argument("--config", metavar="RUTA", default=None,
+                    help=f"archivo de configuracion (por omision: {la.CONFIG_NOMBRE} junto a los PDFs, si existe)")
+    ap.add_argument("--excel", metavar="RUTA", default=None,
+                    help="Excel de referencia (solo hace falta si el formato del lote sale del Excel)")
     ap.add_argument("--version", action="version", version=f"%(prog)s {la.VERSION}")
     args = ap.parse_args(argv)
 
@@ -89,6 +97,21 @@ def main(argv=None):
         pdfs = sorted(p for p in path.rglob("*") if p.suffix.lower() == ".pdf")
     else:
         print(f"*** No existe: {path}")
+        return 2
+    base = path if path.is_dir() else path.parent
+    ruta_cfg = pathlib.Path(args.config).expanduser() if args.config else base / la.CONFIG_NOMBRE
+    try:
+        config = la.leer_config(ruta_cfg) if (args.config or ruta_cfg.is_file()) else None
+        for d in la.aplicar_perfil(args.perfil, args.sector, config):
+            print(f"Perfil: {d}")
+        if la.LOTE_ID is None:          # el formato del lote sale del Excel de referencia
+            la._EXCEL = (la.leer_excel_referencia(pathlib.Path(args.excel).expanduser()) if args.excel
+                         else la.buscar_excel(base))
+    except (la.ConfigNoValida, la.ExcelNoLegible) as e:
+        print(f"*** {e}")
+        return 2
+    if la.LOTE_ID is None:
+        print(f"*** Falta el formato del numero de lote: usa --excel o \"batch_pattern\" en {la.CONFIG_NOMBRE}")
         return 2
     print(f"PDFs a revisar: {len(pdfs)}")
     for pdf in pdfs:

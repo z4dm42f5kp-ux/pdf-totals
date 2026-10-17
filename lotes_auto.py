@@ -39,7 +39,7 @@ import pdfplumber
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 # ============================== CONFIGURACION ===============================
 # Total esperado de la tabla "Cantidad total para destruccion" (None = sin comprobar).
@@ -150,6 +150,359 @@ CANT_ETIQUETA = re.compile(
 LOTE_ETIQUETA = re.compile(r"(?:l[o0]te|serial|serie|n/s|s/n)\.?\s*(?:n[º°o]\.?|n[uú]m\.?|n[uú]mero)?"
                            r"\s*[:#\-]?\s*(?P<id>\d{8})", re.I)
 
+# Valores del perfil predeterminado (este retiro) que el resto del programa consulta.
+LOTE_MAYUSCULAS = False                   # True: los lotes se comparan en mayusculas
+FILA_TOTAL_RE = re.compile(r"pieza|cantidad|pzas|unidades")   # renglon "TOTAL ... PIEZAS"
+TOTAL_PALABRA_RE = re.compile(r"total")
+PIEZA_RE = re.compile(r"pieza")           # "cajas" que en realidad cuentan piezas
+CAJA_PREFIJOS = ("caj",)
+EXCEL_NOD_RE = re.compile(r"no\s*distribu")
+EXCEL_RET_RE = re.compile(r"retirad")
+EXCEL_RET_EXCLUYE = re.compile(r"total|destruc")
+EXCEL_LOTE_RE = None                      # perfiles sin patron de lote: columna de lotes del Excel
+NUMEROS = "mx"                            # "mx": 1,234.56   "auto": tambien 1.234,56
+TEXTOS_EXCEL = {"hoja": "Lotes", "titulos": ["Cantidad de producto retirado", "Cantidad no distribuida",
+                                             "Cantidad total para destrucción"],
+                "lote": "Lote", "cantidad": "Cantidad en Piezas", "total": "TOTAL",
+                "esperado": "Esperado", "diferencia": "Diferencia"}
+
+
+# ================================ PERFILES ==================================
+# Un perfil adapta el programa a otro pais, idioma o sector (issue #5). El perfil
+# predeterminado, "traxicoll", es exactamente el comportamiento de siempre: no cambia
+# nada de lo anterior. Los demas perfiles agregan vocabulario en ingles, aleman, frances
+# e italiano, aceptan importes con coma decimal (1.234,56 EUR), no comprueban totales
+# esperados ni topes (no se conocen) y toman el formato del numero de lote de la
+# configuracion, del sector o de la columna de lotes del Excel de referencia.
+# Fuentes del vocabulario: GS1 (AI 10 lote, 21 serie, 17 caducidad), AMG §10 ("Ch.-B.",
+# "verwendbar bis"), LKV §1 (lote de alimentos con "L"), reglamento GPSR de la UE
+# (type, batch or serial number), formularios de retiro de la FDA y del USDA (Lot Code,
+# Quantity on Hand, Destroyed), ISO 3779 (VIN de 17 caracteres).
+PERFIL_PREDETERMINADO = "traxicoll"
+CONFIG_NOMBRE = "tute-lote.json"
+
+VOCABULARIO = {
+    # Expresiones sobre texto sin acentos y en minusculas (sin_acentos), salvo las que
+    # dicen "texto original", que se buscan en el texto tal como se leyo (re.I).
+    "en": {
+        "ret": r"return|recover|recall|withdraw|received|collected",
+        "nod": r"not\s*distribut|undistribut|inventory|on\s*hand|warehouse|quarantin|\bheld\b|blocked",
+        "orig": r"invoic|shipped|\bsold\b|ordered|produced|manufactur|released|(?<!not )(?<!un)distributed",
+        "caja": r"\bcases?\b|\bbox(?:es)?\b|carton|\bctn\b",
+        "cant": r"quantity|\bqty\b|\bunits?\b|\bpcs\b|pieces?|\beach\b|\bea\b|\bcount\b",
+        "total": r"total|destroy|destruct",
+        "nocant": r"reason|invoice\s*(?:no|#|number)|\bcode\b|\bsku\b|\bndc\b|\bgtin\b|\bupc\b|\bitem\b|phone|\bzip\b",
+        "doc_ret": [(r"return", 3), (r"recall", 3), (r"withdraw", 3), (r"recovered", 2),
+                    (r"proof of delivery", 2), (r"goods received", 2), (r"destruction", 1)],
+        "doc_nod": [(r"inventory", 3), (r"not distributed", 4), (r"undistributed", 4), (r"on hand", 2),
+                    (r"quarantine", 2), (r"warehouse", 2)],
+        "meses": r"jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec",
+        "cant_palabras": r"quantity|qty|units|unit|pcs|pieces|piece|pc|each|ea|count",   # texto original
+        "lote_etiquetas": r"\blot\s*(?:code|number|no|#)?|\bbatch(?:\s*(?:code|number|no|#))?|\bserial|\bs/n|\(10\)",
+        "lote_palabras": r"\blot\b|batch|serial|s/n",
+        "unidades": r"pcs|pc|pieces?|units?|ea|each|cases?|box(?:es)?|ctns?|cartons?",
+        "cajas": ("case", "box", "carton", "ctn"),
+        "prioridad": ["returned", "received", "withdrawn", "recovered", "pieces", "quantity", "invoiced"],
+        "excel_nod": r"not\s*distribut|undistribut",
+        "excel_ret": r"withdrawn|returned|recalled|recovered",
+        "excel_excluye": r"total|destroy|destruct",
+        "excel_lote": r"\blot\b|lot\s*(?:no|#|number|code)|batch|serial",
+        "omitir": r"to[\s_\-]*review|needs[\s_\-]*review",
+    },
+    "de": {
+        "ret": r"zuruck|retour|rucksend|ruckgabe|ruckruf|erhalten|eingegangen",
+        "nod": r"nicht\s*(?:ausgeliefert|vertrieben|verteilt)|lagerbestand|\bbestand|\blager\b|quarantan|gesperrt",
+        "orig": r"berechnet|fakturiert|(?<!nicht )geliefert|verkauft|bestellt|produziert|hergestellt|freigegeben",
+        "caja": r"karton|kiste",
+        "cant": r"menge|anzahl|stuck|\bstk\b|\bst\b",
+        "total": r"gesamt|summe|vernicht",
+        "nocant": r"grund|rechnungs|artikel|\bpzn\b|\bean\b|telefon|\bplz\b",
+        "doc_ret": [(r"rucksendung", 3), (r"retoure", 3), (r"ruckruf", 3), (r"ruckgabe", 2),
+                    (r"zuruckgesandt", 2), (r"wareneingang", 2), (r"vernichtung", 1)],
+        "doc_nod": [(r"lagerbestand", 3), (r"nicht ausgeliefert", 4), (r"nicht vertrieben", 4),
+                    (r"bestand", 2), (r"quarantane", 2), (r"gesperrt", 2)],
+        "meses": r"jan|feb|m[aä]r|apr|mai|jun|jul|aug|sep|okt|nov|dez",
+        "cant_palabras": r"menge|anzahl|stück|stueck|stuck|stk|st",
+        "lote_etiquetas": r"\bch\.?\s*-?\s*b|\bchargen?(?:\s*-?\s*(?:nr|nummer|bezeichnung))?|\blos(?:\s*-?\s*(?:nr|nummer))?|\bfin\b",
+        "lote_palabras": r"charge|ch\.?\s*-?\s*b\b|\blos\b",
+        "unidades": r"stk|stück|stueck|stuck|st|kartons?|kisten?",
+        "cajas": ("karton", "kiste"),
+        "prioridad": ["zuruck", "erhalten", "ruckgabe", "menge", "stuck"],
+        "excel_nod": r"nicht\s*(?:ausgeliefert|vertrieben|verteilt)",
+        "excel_ret": r"zuruck|ruckruf|retour",
+        "excel_excluye": r"gesamt|summe|vernicht",
+        "excel_lote": r"charge|ch\.?\s*-?\s*b|\blos\b",
+        "omitir": r"zu[\s_\-]*pr(?:ü|ue|u)fen|nachpr(?:ü|ue|u)fen",
+    },
+    "fr": {
+        "ret": r"retour|rappel|retir|recu\b|recupere",
+        "nod": r"non\s*distribu|inventaire|en\s*stock|entrepot",
+        "orig": r"facture|expedie|vendu|commande|fabrique|libere",
+        "caja": r"carton|caisse",
+        "cant": r"quantite|\bqte\b|unites?",
+        "total": r"total|destruct",
+        "nocant": r"motif|facture\s*n|\bcode\b|article",
+        "doc_ret": [(r"retour", 3), (r"rappel", 3), (r"retrait", 3)],
+        "doc_nod": [(r"inventaire", 3), (r"non distribu", 4)],
+        "meses": r"janv|fevr|févr|mars|avr|mai|juin|juil|aout|août|sept|oct|nov|dec|déc",
+        "cant_palabras": r"quantité|quantite|qté|qte|unités|unites",
+        "lote_etiquetas": r"\bn[°o]\s*de\s*lot|\blot\b",
+        "lote_palabras": r"\blot\b",
+        "unidades": r"unités|unites|pièces|pieces|cartons?",
+        "cajas": ("carton", "caisse"),
+        "prioridad": ["retourn", "recu", "quantite"],
+        "excel_nod": r"non\s*distribu",
+        "excel_ret": r"retire|retourne|rappel",
+        "excel_excluye": r"total|destruct",
+        "excel_lote": r"\blot\b",
+        "omitir": r"a[\s_\-]*verifier",
+    },
+    "it": {
+        "ret": r"\bres[oi]\b|richiam|ritirat|ricevut|recuperat",
+        "nod": r"non\s*distribu|giacenz|magazzino",
+        "orig": r"fatturat|spedit|vendut|ordinat|prodott",
+        "caja": r"cartone|scatol|cass[ae]",
+        "cant": r"quantita|\bqta\b|pezzi",
+        "total": r"totale|distruz",
+        "nocant": r"motivo|fattura|codice|articolo",
+        "doc_ret": [(r"reso", 3), (r"richiamo", 3), (r"ritiro", 3)],
+        "doc_nod": [(r"giacenza", 3), (r"non distribu", 4)],
+        "meses": r"gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic",
+        "cant_palabras": r"quantità|quantita|qtà|qta|pezzi",
+        "lote_etiquetas": r"\blotto",
+        "lote_palabras": r"lotto",
+        "unidades": r"pezzi|pz|cartoni?",
+        "cajas": ("carton", "scatol"),
+        "prioridad": ["res", "ricevut", "pezzi", "quantita"],
+        "excel_nod": r"non\s*distribu",
+        "excel_ret": r"ritirat|res[oi]\b|richiam",
+        "excel_excluye": r"totale|distruz",
+        "excel_lote": r"lotto",
+        "omitir": r"da[\s_\-]*verificare",
+    },
+}
+
+# Sectores: unidades de conteo y etiquetas de identificacion propias del sector.
+SECTORES = {
+    "pharma": {"unidades": r"frascos?|ampolletas?|viales?|vials?|ampoules?|bottles?|blisters?|packs?"
+                           r"|flaschen?|ampullen?|packungen?|durchstechflaschen?",
+               "cant": r"frasco|ampollet|vial|ampoule|bottle|blister|\bpack|flasche|ampulle|packung",
+               "lote_etiquetas": r"\(10\)|\bch\.?\s*-?\s*b"},
+    "devices": {"unidades": r"devices?|kits?|units?|unidades|equipos?|ger(?:ä|ae|a)te?",
+                "cant": r"device|\bkit|equipo|gerat",
+                "lote_etiquetas": r"\(10\)|\(21\)|\bref\b|\budi\b|\bsn\b"},
+    "food": {"unidades": r"bolsas?|latas?|botellas?|paquetes?|frascos?|bags?|cans?|bottles?|jars?|packs?"
+                         r"|beutel|dosen?|flaschen?|packungen?|gl(?:ä|ae|a)ser",
+             "cant": r"bolsa|lata|botella|paquete|\bbag|\bcan\b|\bcans\b|bottle|\bjar|beutel|dose|flasche|packung",
+             "lote_etiquetas": r"\bl\b|lot\s*code|\bmhd\b|best\s*before|consumir\s*antes"},
+    "cosmetics": {"unidades": r"tubos?|frascos?|tubes?|jars?|bottles?|tuben?|tiegel|flaschen?",
+                  "cant": r"tubo|tube|\bjar|bottle|tiegel|flasche",
+                  "lote_etiquetas": r"\bbatch\s*code|\blot\b"},
+    "automotive": {"unidades": r"veh[ií]culos?|vehicles?|fahrzeuge?|unidades|units?",
+                   "cant": r"vehiculo|vehicle|fahrzeug",
+                   "lote_etiquetas": r"\bvin\b|\bniv\b|\bfin\b|fahrgestell",
+                   # ISO 3779: 17 caracteres sin I, O ni Q
+                   "lote": r"[A-HJ-NPR-Z0-9]{17}"},
+    "consumer": {"unidades": r"art[ií]culos?|items?|art?ikel|units?|unidades",
+                 "cant": r"articulo|\bitem|artikel",
+                 "lote_etiquetas": r"\bmodel|\bmodelo|\bdate\s*code"},
+    "chemicals": {"unidades": r"tambor(?:es)?|garrafas?|sacos?|drums?|pails?|bags?|containers?|f(?:ä|ae|a)sser|fass"
+                              r"|kanister|s(?:ä|ae|a)cke?|gebinde",
+                  "cant": r"tambor|garrafa|saco|drum|\bpail|container|fass|kanister|gebinde",
+                  "lote_etiquetas": r"\bbatch\b"},
+    "general": {},
+}
+
+PERFILES = {
+    # nombre: idiomas (el espanol siempre se incluye), formato de numeros, sector
+    PERFIL_PREDETERMINADO: {"idiomas": [], "numeros": "mx", "sector": "pharma"},
+    "mx": {"idiomas": ["en"], "numeros": "mx", "sector": "general", "textos": "es"},
+    "us": {"idiomas": ["en"], "numeros": "auto", "sector": "general", "textos": "en"},
+    "de": {"idiomas": ["de", "en"], "numeros": "auto", "sector": "general", "textos": "de"},
+    "eu": {"idiomas": ["en", "de", "fr", "it"], "numeros": "auto", "sector": "general", "textos": "en"},
+}
+
+TEXTOS_EXCEL_IDIOMA = {
+    "en": {"hoja": "Batches", "titulos": ["Quantity withdrawn", "Quantity not distributed",
+                                          "Total quantity for destruction"],
+           "lote": "Batch", "cantidad": "Quantity (pieces)", "total": "TOTAL",
+           "esperado": "Expected", "diferencia": "Difference"},
+    "de": {"hoja": "Chargen", "titulos": ["Zurückgerufene Menge", "Nicht ausgelieferte Menge",
+                                          "Gesamtmenge zur Vernichtung"],
+           "lote": "Charge", "cantidad": "Menge (Stück)", "total": "GESAMT",
+           "esperado": "Erwartet", "diferencia": "Differenz"},
+}
+
+
+class ConfigNoValida(Exception):
+    """La configuracion (perfil, sector o tute-lote.json) no es valida."""
+
+
+def _une(base, extras, flags=0):
+    """Regex compilada con la expresion base y las expresiones extra como alternativas."""
+    partes = [p for p in [base] + list(extras) if p]
+    return re.compile("|".join(f"(?:{p})" for p in partes), flags)
+
+
+def _patron_lote(nucleo):
+    """Expresion de lote completa a partir del patron del lote en si (grupo 1 = lote)."""
+    return re.compile(r"(?<![A-Za-z0-9.,])(" + nucleo + r")(?![A-Za-z0-9]|[.,]\d)",
+                      re.I if LOTE_MAYUSCULAS else 0)
+
+
+def poner_patron_lote(nucleo):
+    """Cambia el formato del numero de lote (perfiles distintos del predeterminado)."""
+    global LOTE_ID, LOTE_ETIQUETA
+    try:
+        LOTE_ID = _patron_lote(nucleo)
+    except re.error as e:
+        raise ConfigNoValida(f"el patron de lote {nucleo!r} no es una expresion valida: {e}")
+    LOTE_ETIQUETA = re.compile(r"(?:" + _ETIQUETAS_LOTE + r")\.?\s*(?:n[º°o]\.?|n[uú]m\.?|n[uú]mero|nr\.?|no\.?|#)?"
+                               r"\s*[:#\-]?\s*(?P<id>" + nucleo + r")", re.I)
+
+
+_ETIQUETAS_LOTE = r"l[o0]te|serial|serie|n/s|s/n"
+
+
+def aplicar_perfil(nombre=None, sector=None, config=None):
+    """Aplica un perfil, un sector y la configuracion de tute-lote.json. Con el perfil
+    predeterminado, sin sector distinto y sin configuracion no cambia nada.
+    Devuelve una lista de lineas que describen lo aplicado (para la consola)."""
+    global SEMANTICA, TIPO_DOCUMENTO, MESES, FECHA_RE, DINERO_RE, UNIDAD_RE, LOTE_PREFIJO_OK, LOTE_PALABRA
+    global CANT_PALABRAS, Q, CANT_ETIQUETA, PRIORIDAD_RENGLON, FILA_TOTAL_RE, TOTAL_PALABRA_RE, PIEZA_RE
+    global CAJA_PREFIJOS, EXCEL_NOD_RE, EXCEL_RET_RE, EXCEL_RET_EXCLUYE, EXCEL_LOTE_RE, NUMEROS, TEXTOS_EXCEL
+    global TOTAL_ESPERADO, TOTAL_RETIRADO_ESPERADO, TOTAL_NO_DISTRIBUIDA_ESPERADO, EXCEL_NOMBRE
+    global SOLO_LOTES_DEL_EXCEL, MAX_RETIRADO_POR_LOTE, MAX_NO_DISTRIBUIDA_POR_LOTE, OMITIR_NOMBRE
+    global LOTE_MAYUSCULAS, LOTE_ID, LOTE_ETIQUETA, _ETIQUETAS_LOTE, RELEVANTE_RE, CASI_LOTE_RE
+    config = dict(config or {})
+    nombre = nombre or config.pop("profile", None) or PERFIL_PREDETERMINADO
+    sector = sector or config.pop("sector", None)
+    config.pop("profile", None)
+    config.pop("sector", None)
+    if nombre not in PERFILES:
+        raise ConfigNoValida(f"perfil desconocido {nombre!r}; perfiles: {', '.join(PERFILES)}")
+    perfil = PERFILES[nombre]
+    sector = sector or perfil["sector"]
+    if sector not in SECTORES:
+        raise ConfigNoValida(f"sector desconocido {sector!r}; sectores: {', '.join(SECTORES)}")
+    desc = []
+    extra_idiomas = config.pop("languages", None) or []
+    formato = config.pop("number_format", None)
+    salida = config.pop("output_language", None)
+    if not isinstance(extra_idiomas, list) or any(i not in VOCABULARIO and i != "es" for i in extra_idiomas):
+        raise ConfigNoValida(f"'languages' debe ser una lista con: es, {', '.join(VOCABULARIO)}")
+    if formato not in (None, "mx", "auto"):
+        raise ConfigNoValida("'number_format' debe ser \"mx\" (1,234.56) o \"auto\" (tambien 1.234,56)")
+    if salida not in (None, "es", *TEXTOS_EXCEL_IDIOMA):
+        raise ConfigNoValida(f"'output_language' debe ser: es, {', '.join(TEXTOS_EXCEL_IDIOMA)}")
+    predeterminado = (nombre == PERFIL_PREDETERMINADO and sector == perfil["sector"] and not extra_idiomas
+                      and formato in (None, perfil["numeros"]) and salida in (None, "es"))
+    if not predeterminado:
+        idiomas = list(dict.fromkeys(i for i in perfil["idiomas"] + extra_idiomas if i in VOCABULARIO))
+        voc = [VOCABULARIO[i] for i in idiomas]
+        sec = SECTORES[sector]
+        k = lambda clave: [v[clave] for v in voc if v.get(clave)]
+        SEMANTICA = {c: _une(SEMANTICA[c].pattern, k(c) + ([sec["cant"]] if c == "cant" and sec.get("cant") else []))
+                     for c in SEMANTICA}
+        TIPO_DOCUMENTO = {c: TIPO_DOCUMENTO[c] + [x for v in voc for x in v["doc_" + c]] for c in TIPO_DOCUMENTO}
+        MESES = r"(?:" + "|".join([r"ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic"] + k("meses")) + r")[a-z]*\.?"
+        FECHA_RE = re.compile(
+            r"^(?:\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}|\d{4}[/\-.]\d{1,2}[/\-.]\d{1,2}"
+            r"|\d{1,2}[/\-. ]?" + MESES + r"[/\-. ]?\d{2,4}|" + MESES + r"[/\-. ]?\d{2,4}|\d{1,2}/\d{4})$", re.I)
+        unidades = "|".join([r"pzas?|piezas?|pzs|pz|uds?|unidades|frascos?|amp\w*|viales?|cajas?"] + k("unidades")
+                            + ([sec["unidades"]] if sec.get("unidades") else []))
+        UNIDAD_RE = re.compile(r"^(\d[\d.,]*)\s*(" + unidades + r")\.?$", re.I)
+        CAJA_PREFIJOS = tuple(dict.fromkeys(("caj",) + tuple(x for v in voc for x in v["cajas"])))
+        LOTE_PREFIJO_OK = re.compile(r"(?:l[o0]te|lot|serie|no|num|n|l|batch|charge|chb|ch|los|lotto|nr|sn)$", re.I)
+        LOTE_PALABRA = _une(LOTE_PALABRA.pattern, k("lote_palabras"), re.I)
+        CANT_PALABRAS = "|".join([CANT_PALABRAS] + k("cant_palabras"))
+        Q = r"(?:" + CANT_PALABRAS + r")(?![a-z])\.?"
+        CANT_ETIQUETA = re.compile(
+            Q + r"(?:\s*(?:/|en|de|in|of)?\s*" + Q + r")*\s*(?:\(\w*\))?\s*[:=\-]?\s*(?P<n>\d[\d.,]*)", re.I)
+        _ETIQUETAS_LOTE = "|".join([_ETIQUETAS_LOTE] + k("lote_etiquetas")
+                                   + ([sec["lote_etiquetas"]] if sec.get("lote_etiquetas") else []))
+        PRIORIDAD_RENGLON = PRIORIDAD_RENGLON + [p for v in voc for p in v["prioridad"]]
+        FILA_TOTAL_RE = _une(FILA_TOTAL_RE.pattern, k("cant") + ([sec["cant"]] if sec.get("cant") else []))
+        TOTAL_PALABRA_RE = _une(TOTAL_PALABRA_RE.pattern, k("total"))
+        PIEZA_RE = _une(PIEZA_RE.pattern, [r"piece|\bpcs\b|stuck|\bstk\b|pezzi|unit"])
+        EXCEL_NOD_RE = _une(EXCEL_NOD_RE.pattern, k("excel_nod"))
+        EXCEL_RET_RE = _une(EXCEL_RET_RE.pattern, k("excel_ret"))
+        EXCEL_RET_EXCLUYE = _une(EXCEL_RET_EXCLUYE.pattern, k("excel_excluye"))
+        OMITIR_NOMBRE = _une(OMITIR_NOMBRE.pattern, k("omitir"), re.I)
+        NUMEROS = formato or perfil["numeros"]
+        if NUMEROS == "auto":
+            DINERO_RE = re.compile(
+                r"^(?:[$sS€]\s*)?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}(?:\s*(?:usd|mxn|eur|€|\$))?$"
+                r"|^(?:€\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}(?:\s*(?:eur|€|chf|fr\.?))?$"
+                r"|^[$€]\s*(?:\d{1,3}(?:[,.]\d{3})+|\d+)$", re.I)
+        TEXTOS_EXCEL = TEXTOS_EXCEL_IDIOMA.get(salida or perfil.get("textos"), TEXTOS_EXCEL)
+        if nombre != PERFIL_PREDETERMINADO:
+            # totales, topes, Excel y lote de este retiro: no valen para otros
+            TOTAL_ESPERADO = TOTAL_RETIRADO_ESPERADO = TOTAL_NO_DISTRIBUIDA_ESPERADO = None
+            MAX_RETIRADO_POR_LOTE = MAX_NO_DISTRIBUIDA_POR_LOTE = float("inf")
+            EXCEL_NOMBRE = None
+            LOTE_MAYUSCULAS = True
+            EXCEL_LOTE_RE = _une("", [r"l[o0]te"] + k("excel_lote"))
+            LOTE_ID = None                 # se toma del sector, de la configuracion o del Excel
+        if sec.get("lote"):
+            poner_patron_lote(sec["lote"])
+        elif LOTE_ID is not None:          # perfil predeterminado con otro sector: mismo lote
+            LOTE_ETIQUETA = re.compile(r"(?:" + _ETIQUETAS_LOTE + r")\.?\s*(?:n[º°o]\.?|n[uú]m\.?|n[uú]mero)?"
+                                       r"\s*[:#\-]?\s*(?P<id>\d{8})", re.I)
+        RELEVANTE_RE = _une(RELEVANTE_RE.pattern, k("lote_palabras") + k("cant") + k("ret"), re.I)
+        CASI_LOTE_RE = CASI_LOTE_RE if nombre == PERFIL_PREDETERMINADO else None
+        desc.append(f"perfil {nombre}, sector {sector}"
+                    + (f", idiomas: espanol, {', '.join(idiomas)}" if idiomas else ""))
+    # ---- tute-lote.json ----
+    if "batch_pattern" in config:
+        poner_patron_lote(str(config.pop("batch_pattern")))
+        desc.append("formato de lote de la configuracion")
+    esperado = config.pop("expected", None)
+    if esperado is not None:
+        if not isinstance(esperado, dict):
+            raise ConfigNoValida("'expected' debe ser un objeto con withdrawn, not_distributed y total")
+        TOTAL_RETIRADO_ESPERADO = _entero_o_none(esperado.get("withdrawn"), "expected.withdrawn")
+        TOTAL_NO_DISTRIBUIDA_ESPERADO = _entero_o_none(esperado.get("not_distributed"), "expected.not_distributed")
+        TOTAL_ESPERADO = _entero_o_none(esperado.get("total"), "expected.total")
+    topes = config.pop("max_per_batch", None)
+    if topes is not None:
+        if not isinstance(topes, dict):
+            raise ConfigNoValida("'max_per_batch' debe ser un objeto con withdrawn y not_distributed")
+        a = _entero_o_none(topes.get("withdrawn"), "max_per_batch.withdrawn")
+        b = _entero_o_none(topes.get("not_distributed"), "max_per_batch.not_distributed")
+        MAX_RETIRADO_POR_LOTE = float("inf") if a is None else a
+        MAX_NO_DISTRIBUIDA_POR_LOTE = float("inf") if b is None else b
+    if "reference_excel" in config:
+        EXCEL_NOMBRE = config.pop("reference_excel") or None
+    if "only_batches_in_excel" in config:
+        SOLO_LOTES_DEL_EXCEL = bool(config.pop("only_batches_in_excel"))
+    if "skip_name_pattern" in config:
+        try:
+            OMITIR_NOMBRE = re.compile(str(config.pop("skip_name_pattern")), re.I)
+        except re.error as e:
+            raise ConfigNoValida(f"skip_name_pattern no es una expresion valida: {e}")
+    if config:
+        raise ConfigNoValida(f"clave(s) desconocida(s) en la configuracion: {', '.join(sorted(config))}")
+    return desc
+
+
+def _entero_o_none(v, clave):
+    if v is None or v == 0:
+        return None
+    if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+        raise ConfigNoValida(f"'{clave}' debe ser un numero entero (o null)")
+    return v
+
+
+def leer_config(ruta):
+    try:
+        datos = json.loads(pathlib.Path(ruta).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as e:
+        raise ConfigNoValida(f"no se pudo leer {ruta}: {e}")
+    if not isinstance(datos, dict):
+        raise ConfigNoValida(f"{ruta} debe contener un objeto JSON")
+    return datos
+
 
 # ------------------------------- utilidades --------------------------------
 def sin_acentos(texto):
@@ -160,11 +513,13 @@ def sin_acentos(texto):
 def lotes_en(texto):
     """Todos los lotes validos del texto, en orden."""
     res = []
+    if LOTE_ID is None:                   # perfil sin formato de lote todavia (antes del Excel)
+        return res
     for m in LOTE_ID.finditer(texto or ""):
         previo = re.search(r"[A-Za-z]+$", texto[:m.start()])
         if previo and not LOTE_PREFIJO_OK.search(previo.group()):
             continue                      # p. ej. una factura FE25012345
-        res.append(m.group(1))
+        res.append(m.group(1).upper() if LOTE_MAYUSCULAS else m.group(1))
     return res
 
 
@@ -185,6 +540,14 @@ def a_entero(s):
 
 
 def a_dinero(s):
+    if NUMEROS == "auto":
+        s = re.sub(r"(?i)^[$sS€]\s*|\s*(?:usd|mxn|eur|€|\$|chf|fr\.?)$", "", (s or "").strip())
+        if re.fullmatch(r"(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}", s):          # 1.234,56
+            s = s.replace(".", "").replace(",", ".")
+        try:
+            return float(s.replace(",", ""))
+        except ValueError:
+            return None
     s = re.sub(r"^[$sS]\s*", "", (s or "").strip()).replace(",", "")
     try:
         return float(s)
@@ -422,7 +785,8 @@ def tipo_celda(texto):
     if not s:
         return "vacio", None
     lotes = lotes_en(s)
-    if lotes and re.fullmatch(r"[A-Za-z]{0,4}[\s:#.\-]*" + lotes[0] + r"[\s.]*", s):
+    if lotes and re.fullmatch(r"[A-Za-z]{0,4}[\s:#.\-]*" + re.escape(lotes[0]) + r"[\s.]*", s,
+                              re.I if LOTE_MAYUSCULAS else 0):
         return "lote", lotes[0]
     if FECHA_RE.match(s):
         return "fecha", s
@@ -433,7 +797,7 @@ def tipo_celda(texto):
         return "entero", v
     m = UNIDAD_RE.match(s)
     if m and a_entero(m.group(1)) is not None:
-        return ("cajas" if m.group(2).lower().startswith("caj") else "entero"), a_entero(m.group(1))
+        return ("cajas" if m.group(2).lower().startswith(CAJA_PREFIJOS) else "entero"), a_entero(m.group(1))
     if re.search(r"[A-Za-z]", s) and re.search(r"\d", s) and " " not in s:
         return "codigo", s
     return "texto", s
@@ -454,7 +818,7 @@ def unir_lotes_partidos(toks):
         if res:
             p = res[-1]
             junto = p.text + t.text
-            if (p.text.isdigit() and t.text.isdigit() and len(junto) == 8 and lotes_en(junto)
+            if (p.text.isdigit() and t.text.isdigit() and lotes_en(junto) == [junto]
                     and not lotes_en(p.text) and t.x0 - p.x1 < 1.2 * max(p.h, t.h)):
                 res[-1] = Tok(p.x0, t.x1, p.y, max(p.h, t.h), junto, min(p.conf, t.conf), p.caja)
                 continue
@@ -745,7 +1109,7 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
         enteros_doc += ents
         dinero_doc += [c.valor for c in cs if c.tipo == "dinero"]
         t = sin_acentos(renglones[i].texto)
-        if ents and "total" in t and re.search(r"pieza|cantidad|pzas|unidades", t):
+        if ents and TOTAL_PALABRA_RE.search(t) and FILA_TOTAL_RE.search(t):
             totales_rotulados.append(max(ents))
 
     for tabla in tablas:
@@ -803,7 +1167,7 @@ def analizar_tablas(renglones, celdas, pnum, tipo_pag, usados, traza):
             if s["orig"] and not (s["ret"] or s["nod"]):
                 p -= 3
                 por.append("cantidad original (facturada/distribuida)")
-            if s["caja"] and not re.search(r"pieza", sin_acentos(heads[k])):
+            if s["caja"] and not PIEZA_RE.search(sin_acentos(heads[k])):
                 p -= 4
                 por.append("cuenta cajas")
             if s["nocant"] and not s["cant"]:
@@ -1044,6 +1408,7 @@ def deduplicar_en_archivo(entradas, avisos, traza):
 
 
 RELEVANTE_RE = re.compile(r"\d{6,}|l[o0]te|pieza|pzas|cantidad|devol|retir", re.I)
+CASI_LOTE_RE = re.compile(r"(?<!\d)2[0-9]{6,8}(?!\d)")   # numeros que podrian ser lotes mal leidos
 
 
 def leer_pdf(ruta, nombre, pasada=1, traza=None):
@@ -1157,20 +1522,38 @@ def leer_excel_referencia(ruta):
     None si el libro no tiene esa columna."""
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
+    global LOTE_ID
     wb = load_workbook(ruta, data_only=True, read_only=True)
+    modo_lista = LOTE_ID is None        # perfil sin formato de lote: los lotes salen de este Excel
     for ws in wb.worksheets:
         filas = list(ws.iter_rows(values_only=True))
-        c_nod = c_ret = fila_enc = None
+        c_nod = c_ret = fila_enc = c_lista = None
         for i, fila in enumerate(filas[:60]):
             for j, v in enumerate(fila):
                 t = sin_acentos(str(v)) if v is not None else ""
-                if c_nod is None and re.search(r"no\s*distribu", t):
+                if c_nod is None and EXCEL_NOD_RE.search(t):
                     c_nod, fila_enc = j, i
-                elif c_ret is None and "retirad" in t and "total" not in t and "destruc" not in t:
+                elif c_ret is None and EXCEL_RET_RE.search(t) and not EXCEL_RET_EXCLUYE.search(t):
                     c_ret = j
                     fila_enc = i if fila_enc is None else max(fila_enc, i)
-        if c_nod is None:
+                elif modo_lista and c_lista is None and EXCEL_LOTE_RE is not None and EXCEL_LOTE_RE.search(t):
+                    c_lista = j
+                    fila_enc = i if fila_enc is None else max(fila_enc, i)
+        if c_nod is None and not (modo_lista and c_lista is not None and c_ret is not None):
             continue
+        if modo_lista:
+            if c_lista is None:
+                continue
+            valores = set()
+            for fila in filas[fila_enc + 1:]:
+                v = fila[c_lista] if c_lista < len(fila) else None
+                v = str(int(v)) if isinstance(v, float) and v.is_integer() else ("" if v is None else str(v))
+                v = v.strip().upper()
+                if v and len(v) <= 40 and re.search(r"\d", v):
+                    valores.add(v)
+            if not valores:
+                continue
+            poner_patron_lote("|".join(re.escape(x) for x in sorted(valores, key=lambda x: (-len(x), x))))
         # columna de lote: la que tiene mas lotes validos debajo del encabezado
         cuenta = Counter()
         for fila in filas[fila_enc + 1:]:
@@ -1197,7 +1580,7 @@ def leer_excel_referencia(ruta):
                     return a_entero(x.strip())
                 return None
             nod, ret = num(c_nod), num(c_ret)
-            if nod is None and fila[c_nod] not in (None, ""):
+            if nod is None and c_nod is not None and c_nod < len(fila) and fila[c_nod] not in (None, ""):
                 sin_valor += 1
             lote = lotes[0]
             if lote in refs:
@@ -1213,6 +1596,8 @@ def leer_excel_referencia(ruta):
         if refs:
             letra = lambda c: get_column_letter(c + 1) if c is not None else "-"
             return ExcelRef(str(ruta), ws.title, letra(c_lote), letra(c_nod), letra(c_ret), refs, avisos)
+    if modo_lista:
+        LOTE_ID = None                    # este libro no sirve: el formato sigue sin conocerse
     return None
 
 
@@ -1225,7 +1610,7 @@ def buscar_excel(folder):
     .xlsx/.xlsm con una columna 'no distribuida'."""
     todos = [p for p in folder.rglob("*") if p.is_file() and not p.name.startswith("~$")
              and CARPETA_RESULTADOS not in p.parts]
-    nombrados = sorted(p for p in todos if p.stem.lower() == EXCEL_NOMBRE.lower())
+    nombrados = sorted(p for p in todos if EXCEL_NOMBRE and p.stem.lower() == EXCEL_NOMBRE.lower())
     for p in nombrados:
         if p.suffix.lower() == ".xls":
             raise ExcelNoLegible(f"{p} esta en el formato antiguo .xls: abrelo en Excel y guardalo como "
@@ -1791,18 +2176,18 @@ ROJO = PatternFill("solid", start_color="FFC7CE", end_color="FFC7CE")
 def escribir_excel(ruta, res, total_esperado):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Lotes"
+    tx = TEXTOS_EXCEL
+    ws.title = tx["hoja"]
     negrita = Font(bold=True)
     lotes = sorted(set(res.ret) | set(res.nod) | set(res.refs), key=orden_lote)
     malos = {(t, l) for _, t, l, _, _ in res.problemas}
     n = len(lotes)
     fin = 3 + n                        # fila del TOTAL
-    titulos = ["Cantidad de producto retirado", "Cantidad no distribuida", "Cantidad total para destrucción"]
-    for t, titulo in enumerate(titulos):
+    for t, titulo in enumerate(tx["titulos"]):
         c0 = 1 + 3 * t
         ws.cell(1, c0, titulo).font = negrita
-        ws.cell(2, c0, "Lote").font = negrita
-        ws.cell(2, c0 + 1, "Cantidad en Piezas").font = negrita
+        ws.cell(2, c0, tx["lote"]).font = negrita
+        ws.cell(2, c0 + 1, tx["cantidad"]).font = negrita
         for i, lote in enumerate(lotes):
             fila = 3 + i
             ws.cell(fila, c0, int(lote) if lote.isdigit() else lote)
@@ -1817,7 +2202,7 @@ def escribir_excel(ruta, res, total_esperado):
             else:
                 celda = ws.cell(fila, c0 + 1, f"=B{fila}+E{fila}")
             celda.number_format = "#,##0"
-        ws.cell(fin, c0, "TOTAL").font = negrita
+        ws.cell(fin, c0, tx["total"]).font = negrita
         col = "BEH"[t]
         celda = ws.cell(fin, c0 + 1, f"=SUM({col}3:{col}{fin - 1})" if n else 0)
         celda.number_format = "#,##0"
@@ -1832,10 +2217,10 @@ def escribir_excel(ruta, res, total_esperado):
         if e is None:
             continue
         c0, col = 1 + 3 * t, "BEH"[t]
-        ws.cell(fin + 2, c0, "Esperado")
+        ws.cell(fin + 2, c0, tx["esperado"])
         c = ws.cell(fin + 2, c0 + 1, e)
         c.number_format = "#,##0"
-        ws.cell(fin + 3, c0, "Diferencia")
+        ws.cell(fin + 3, c0, tx["diferencia"])
         c = ws.cell(fin + 3, c0 + 1, f"={col}{fin}-{col}{fin + 2}")
         c.number_format = "#,##0"
         if valores[clave] != e:
@@ -2045,7 +2430,7 @@ def escribir_revision(ruta, folder, lecturas, res, total_esperado, omitidos, sin
         t.append(f"       paginas: {L.paginas}; lectura: {L.fuente}"
                  + (f" (confianza media del OCR {L.conf_media:.2f})" if L.fuente != "texto" else ""))
         lotes = sorted(set(x for linea in L.lineas for x in lotes_en(linea)))
-        casi = sorted(set(m for linea in L.lineas for m in re.findall(r"(?<!\d)2[0-9]{6,8}(?!\d)", linea)
+        casi = sorted(set(m for linea in L.lineas for m in (CASI_LOTE_RE.findall(linea) if CASI_LOTE_RE else [])
                           if not lotes_en(m)))
         if not L.lineas:
             why = "no se pudo leer ningun texto (pagina en blanco o imagen ilegible)"
@@ -2256,11 +2641,11 @@ def main(argv=None):
         description="Calcula por lote la cantidad retirada, la no distribuida y el total para "
                     "destruccion a partir de los PDFs de una carpeta (incluye subcarpetas).")
     ap.add_argument("carpeta", help="carpeta con los PDFs")
-    ap.add_argument("--total-esperado", type=int, default=TOTAL_ESPERADO, metavar="N",
+    ap.add_argument("--total-esperado", type=int, default=None, metavar="N",
                     help=f"total esperado para destruccion (por omision: {TOTAL_ESPERADO}; 0 = no comprobar)")
-    ap.add_argument("--retirado-esperado", type=int, default=TOTAL_RETIRADO_ESPERADO, metavar="N",
+    ap.add_argument("--retirado-esperado", type=int, default=None, metavar="N",
                     help=f"total esperado de producto retirado (por omision: {TOTAL_RETIRADO_ESPERADO}; 0 = no comprobar)")
-    ap.add_argument("--no-distribuida-esperada", type=int, default=TOTAL_NO_DISTRIBUIDA_ESPERADO, metavar="N",
+    ap.add_argument("--no-distribuida-esperada", type=int, default=None, metavar="N",
                     help=f"total esperado no distribuido (por omision: {TOTAL_NO_DISTRIBUIDA_ESPERADO}; 0 = no comprobar)")
     ap.add_argument("--excel", metavar="RUTA", default=EXCEL_REFERENCIA,
                     help="Excel de referencia (por omision se busca en la carpeta y subcarpetas)")
@@ -2268,18 +2653,37 @@ def main(argv=None):
                     help="procesos que leen paginas a la vez (por omision: automatico; 1 = uno solo)")
     ap.add_argument("--sin-cache", action="store_true",
                     help="volver a leer todas las paginas aunque esten en resultados_lotes/cache")
+    ap.add_argument("--perfil", choices=list(PERFILES), default=None,
+                    help=f"pais o idioma de los documentos (por omision: {PERFIL_PREDETERMINADO}, este retiro)")
+    ap.add_argument("--sector", choices=list(SECTORES), default=None,
+                    help="sector de los productos (unidades y etiquetas de lote propias del sector)")
+    ap.add_argument("--config", metavar="RUTA", default=None,
+                    help=f"archivo de configuracion (por omision: {CONFIG_NOMBRE} en la carpeta, si existe)")
     ap.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     args = ap.parse_args(argv)
     inicio = time.monotonic()
-    esperado = args.total_esperado or None
-    global ESPERADOS
-    ESPERADOS = {"ret": args.retirado_esperado or None, "nod": args.no_distribuida_esperada or None,
-                 "total": esperado}
 
     folder = pathlib.Path(args.carpeta).expanduser()
     if not folder.is_dir():
         print(f"*** No existe la carpeta: {folder}")
         return 2
+    ruta_cfg = pathlib.Path(args.config).expanduser() if args.config else folder / CONFIG_NOMBRE
+    try:
+        config = leer_config(ruta_cfg) if (args.config or ruta_cfg.is_file()) else None
+        desc = aplicar_perfil(args.perfil, args.sector, config)
+    except ConfigNoValida as e:
+        print(f"*** Configuracion no valida: {e}")
+        return 2
+    if config is not None:
+        print(f"Configuracion: {ruta_cfg}")
+    for d in desc:
+        print(f"Perfil: {d}")
+    elegir = lambda arg, valor: (arg if arg is not None else valor) or None
+    esperado = elegir(args.total_esperado, TOTAL_ESPERADO)
+    global ESPERADOS
+    ESPERADOS = {"ret": elegir(args.retirado_esperado, TOTAL_RETIRADO_ESPERADO),
+                 "nod": elegir(args.no_distribuida_esperada, TOTAL_NO_DISTRIBUIDA_ESPERADO),
+                 "total": esperado}
     global _EXCEL
     if args.excel:
         ruta_x = pathlib.Path(args.excel).expanduser()
@@ -2306,6 +2710,11 @@ def main(argv=None):
             print(f"   AVISO: {a}")
     else:
         print("*** No se encontro el Excel de referencia: la cantidad no distribuida saldra de los PDFs.")
+    if LOTE_ID is None:
+        print("*** Falta el formato del numero de lote. Indicalo en " + CONFIG_NOMBRE + ' con "batch_pattern" '
+              '(por ejemplo "batch_pattern": "L\\\\d{6}"), elige un --sector que lo defina, o pon en la carpeta '
+              "un Excel de referencia con una columna de lotes (Lote, Lot, Batch, Charge).")
+        return 2
     salida = folder / CARPETA_RESULTADOS
     pdfs = sorted(p for p in folder.rglob("*") if p.suffix.lower() == ".pdf"
                   and salida not in p.parents)

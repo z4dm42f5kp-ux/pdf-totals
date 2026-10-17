@@ -7,6 +7,10 @@ The default folder is examples/ in the project folder. The folder is copied to a
 temporary folder first, so the examples stay unchanged. The program prints every batch
 whose withdrawn or not distributed quantity differs from the expected value.
 
+Then it runs the pipeline of small programs in etapas/ (paginas.py | cantidades.py |
+conciliar.py | excel.py) on the same folder, with the cache of the first run, and checks
+that every batch has the same quantities as with lotes_auto.py.
+
 expected.json can list known differences (known_differences): differences that
 lotes_auto.py is known to produce on these examples, for example a cell that the OCR
 cannot read. They are reported but do not count as failures.
@@ -98,7 +102,42 @@ def main(argv):
             print(f"The output files of lotes_auto.py are in {guardar}")
             return 1
         print("All batches match, apart from the known differences.")
-        return 0
+        return comparar_tuberia(carpeta, ret, nod, extra)
+
+
+def comparar_tuberia(carpeta, ret, nod, extra):
+    """etapas/: same batches and quantities as lotes_auto.py on the same folder."""
+    py, et = sys.executable, ROOT / "etapas"
+    xlsx = carpeta / "tuberia.xlsx"
+    perfil = [x for i, x in enumerate(extra) if x in ("--perfil", "--sector") or
+              (i and extra[i - 1] in ("--perfil", "--sector"))]
+    pasos = [[py, str(et / "paginas.py"), str(carpeta)],
+             [py, str(et / "cantidades.py"), "--carpeta", str(carpeta)] + perfil,
+             [py, str(et / "conciliar.py"), "--carpeta", str(carpeta)] + perfil,
+             [py, str(et / "excel.py"), "-o", str(xlsx)] + perfil]
+    procesos, entrada = [], None
+    for paso in pasos:
+        p = subprocess.Popen(paso, stdin=entrada, stdout=subprocess.PIPE if paso is not pasos[-1] else None)
+        if entrada is not None:
+            entrada.close()
+        entrada = p.stdout
+        procesos.append(p)
+    codigos = [p.wait() for p in procesos]
+    if any(codigos):
+        print(f"The pipeline in etapas/ failed with return codes {codigos}")
+        return 2
+    ws = load_workbook(xlsx).active
+    t_ret, t_nod = leer_tabla(ws, 1, 2), leer_tabla(ws, 4, 5)
+    difs = [f"{tipo} {lote}: lotes_auto.py {a.get(lote, 0):,}, etapas/ {b.get(lote, 0):,}"
+            for tipo, a, b in (("retirado", ret, t_ret), ("no_distribuida", nod, t_nod))
+            for lote in sorted(set(a) | set(b)) if a.get(lote, 0) != b.get(lote, 0)]
+    if difs:
+        print(f"The pipeline in etapas/ gives {len(difs)} other quantities:")
+        for x in difs:
+            print("  " + x)
+        return 1
+    print("The pipeline in etapas/ gives the same quantities as lotes_auto.py.")
+    return 0
 
 
 if __name__ == "__main__":

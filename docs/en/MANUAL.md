@@ -9,8 +9,9 @@ diagnostico.py - show what lotes_auto.py reads and detects in one or more PDF do
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
+python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] [--perfil PROFILE] [--sector SECTOR] [--config PATH] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] [--perfil PROFILE] [--sector SECTOR] [--config PATH] [--excel PATH] PATH
+python etapas/paginas.py PATH... | python etapas/cantidades.py | python etapas/conciliar.py --carpeta FOLDER | python etapas/excel.py -o FILE
 ```
 
 ## Description
@@ -102,6 +103,9 @@ Options of lotes_auto.py:
 - `--total-esperado N` sets the expected total for destruction. The default value is `344,451`. The value 0 switches the check off.
 - `--procesos N` reads N pages at the same time, in N separate processes. The default is automatic: one process for each processor core, at most 8, and not more than the free memory allows (about 1.2 GB for each process). The value 1 reads one page after the other in a single process.
 - `--sin-cache` reads every page again, even when it is in the cache (see below).
+- `--perfil PROFILE` selects the country and the languages of the documents. The default is `traxicoll`, the current withdrawal. See the section about other countries, languages and sectors.
+- `--sector SECTOR` selects the sector of the products: `pharma`, `devices`, `food`, `cosmetics`, `automotive`, `consumer`, `chemicals` or `general`.
+- `--config PATH` reads the settings from this configuration file. Without this option, the program reads the file `tute-lote.json` in the folder FOLDER, if it exists.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
@@ -110,6 +114,8 @@ Options of diagnostico.py:
 - `PATH` is a single PDF file, or a folder. If it is a folder, the program examines all PDF files in it.
 - `--lineas N` shows no more than N lines of text for each PDF. The default value is 40.
 - `--lectura N` uses OCR reading N: 1 is the normal reading, 2 uses a higher resolution and more contrast, and 3 enlarges and sharpens the image.
+- `--perfil`, `--sector` and `--config` work as in lotes_auto.py. Without `--config`, diagnostico.py reads `tute-lote.json` in the folder of PATH, if it exists.
+- `--excel PATH` uses this reference Excel file. It is only needed when the format of the batch numbers comes from the Excel file.
 - `--version` shows the version number. The program then stops.
 - `-h` or `--help` shows a short help text. The program then stops.
 
@@ -178,6 +184,103 @@ The settings are at the beginning of the file lotes_auto.py. You can change them
 `PRIORIDAD_RENGLON` decides which quantity row is used in forms in which each column describes one product.
 
 `SEMANTICA` and `TIPO_DOCUMENTO` contain the words that are used as one signal among others to understand column titles and to recognize the type of a page.
+
+## Other countries, languages and sectors
+
+The program was written for one withdrawal of a pharmaceutical product in Mexico. A profile adapts it to documents from other countries, in other languages and from other sectors. The default profile `traxicoll` is this withdrawal. It is not changed by the other profiles.
+
+The profiles are:
+
+- `traxicoll`: the current withdrawal. Spanish documents, batch numbers with eight digits that start with `25` or `26`, and the expected totals and limits of this withdrawal.
+- `mx`: Mexico. Spanish and English documents. Amounts are written as `1,234.56`.
+- `us`: United States. English documents. Amounts are written as `$1,234.56`.
+- `de`: Germany. German and English documents. Amounts are written as `1.234,56 €`, and dates as `12.03.2026`.
+- `eu`: the European Union. English, German, French, Italian and Spanish documents. Both ways of writing amounts are accepted.
+
+All profiles except `traxicoll` know the words for batch numbers, quantities, returns, inventories and totals in their languages. Examples are `Lot No.`, `Batch`, `Qty`, `Units`, `Returned` and `On hand` in English, and `Ch.-B.`, `Charge`, `Los-Nr.`, `Menge`, `Stück`, `Rücksendung` and `Lagerbestand` in German. They also accept the batch number in the human-readable text of a GS1 barcode, for example `(10)AB2402`. The program messages and the file revisar_a_mano.txt stay in Spanish. The titles in totales_lotes.xlsx are in English for the profiles `us` and `eu`, and in German for the profile `de`.
+
+The other profiles do not know the expected totals, the limits for one batch, the name of the reference Excel file, or the format of the batch numbers. Without expected totals and limits, the program does not check them. The format of the batch numbers is taken from the first of these sources that exists:
+
+1. the setting `batch_pattern` in the configuration file;
+2. the sector, for the sector `automotive`: the vehicle identification number (VIN) with 17 characters, as defined in ISO 3779;
+3. the reference Excel file: the values in the column whose title is `Lote`, `Lot`, `Batch`, `Charge`, `Los` or `Lotto`. Only these batch numbers are then recognized in the documents.
+
+If none of these sources exists, the program stops with return code 2 and explains what is missing.
+
+The sectors add the units and the labels that are common in the sector:
+
+- `pharma`: bottles, vials, ampoules, packs; `Ch.-B.`, GS1 `(10)`.
+- `devices`: devices, kits; GS1 `(10)` and `(21)`, `REF`, `UDI`, `SN`.
+- `food`: bags, cans, bottles, jars, packs; the batch label `L`, `Lot code`, `MHD`, `Best before`.
+- `cosmetics`: tubes, jars, bottles; `Batch code`.
+- `automotive`: vehicles; `VIN`, `NIV`, `FIN`.
+- `consumer`: items, articles; `Model`, `Date code`.
+- `chemicals`: drums, pails, bags, containers, canisters.
+- `general`: no additions.
+
+### The configuration file
+
+The configuration file is a JSON file with the name `tute-lote.json` in the folder with the PDF documents, or the file that is given with `--config`. All keys are optional. For example:
+
+```
+{
+  "profile": "de",
+  "sector": "food",
+  "batch_pattern": "L\\d{6}",
+  "expected": {"withdrawn": 12400, "not_distributed": 3100, "total": 15500},
+  "max_per_batch": {"withdrawn": 5000, "not_distributed": 8000},
+  "reference_excel": "Rueckrufliste",
+  "only_batches_in_excel": true,
+  "skip_name_pattern": "zu pr(ü|ue)fen|FALTA REVISION",
+  "languages": ["fr"],
+  "number_format": "auto",
+  "output_language": "de"
+}
+```
+
+- `profile` and `sector` select the profile and the sector. The options `--perfil` and `--sector` have priority.
+- `batch_pattern` is a regular expression for one batch number, without the label. In JSON, a backslash is written twice. Examples: `L\\d{6}` for an `L` and six digits, `[A-Z]{2}\\d{4}` for two letters and four digits.
+- `expected` contains the expected totals: withdrawn pieces, pieces that were not distributed, and the total for destruction. The value `null` or `0` switches a check off. The options `--retirado-esperado`, `--no-distribuida-esperada` and `--total-esperado` have priority.
+- `max_per_batch` contains the limits for one batch.
+- `reference_excel` is the name of the reference Excel file without the extension.
+- `only_batches_in_excel` decides whether quantities with a batch number that is not in the Excel file are left out. The default value is `true`.
+- `skip_name_pattern` is a regular expression for the names of files that are skipped.
+- `languages` adds the words of more languages: `en`, `de`, `fr`, `it`.
+- `number_format` is `mx` (only `1,234.56`) or `auto` (also `1.234,56`).
+- `output_language` is the language of the titles in totales_lotes.xlsx: `es`, `en` or `de`.
+
+The program shows the configuration file and the profile that it uses at the start of the run. A key that the program does not know, or a value that is not valid, stops the program with return code 2. Do not accept a configuration file from another person without reading it: it changes what the program counts.
+
+## The pipeline of small programs
+
+The folder `etapas` contains small programs. Each program does one thing, reads lines of JSON on its standard input and writes lines of JSON on its standard output, so that the programs can be connected with pipes:
+
+- `etapas/paginas.py PATH...` reads the pages of the PDF documents, in parallel and with the cache of lotes_auto.py. It writes one line for each page, with the words and their positions.
+- `etapas/texto.py` writes the text of the pages, one line of the page per line. With `--archivo`, each line starts with the name of the PDF and the page number.
+- `etapas/cantidades.py` finds the batch numbers and the quantities in the pages, with the same rules as lotes_auto.py. It writes one line for each PDF and for each quantity.
+- `etapas/conciliar.py` adds up the quantities of each batch, applies the reference Excel file, the limits and the exact corrections, and writes one line for each batch and a summary.
+- `etapas/excel.py -o FILE` writes totales_lotes.xlsx from the lines of conciliar.py.
+
+The complete chain on Linux, macOS and BSD:
+
+```
+python etapas/paginas.py /path/to/pdfs | python etapas/cantidades.py --carpeta /path/to/pdfs | python etapas/conciliar.py --carpeta /path/to/pdfs | python etapas/excel.py -o totales.xlsx
+```
+
+On Windows, in PowerShell:
+
+```
+$p="$env:USERPROFILE\tute-lote\python\python.exe"; $e="$env:USERPROFILE\tute-lote\etapas"; & $p "$e\paginas.py" "C:\path\to\pdfs" | & $p "$e\cantidades.py" --carpeta "C:\path\to\pdfs" | & $p "$e\conciliar.py" --carpeta "C:\path\to\pdfs" | & $p "$e\excel.py" -o totales.xlsx
+```
+
+Other examples:
+
+- `python etapas/paginas.py doc.pdf | python etapas/texto.py | grep -i lote` shows the lines of one PDF that mention a batch.
+- `python etapas/paginas.py /path/to/pdfs > paginas.jsonl` saves the pages. Later commands can read this file instead of the PDF documents: `python etapas/cantidades.py < paginas.jsonl`.
+
+The lines contain only ASCII characters. Letters with accents are written as escape sequences, so the lines pass unchanged through every pipe, including Windows PowerShell 5.1. The programs `cantidades.py`, `conciliar.py` and `excel.py` accept the options `--perfil`, `--sector` and `--config`. `cantidades.py` and `conciliar.py` also accept `--excel` and `--carpeta`, the folder where they look for the reference Excel file and for `tute-lote.json`.
+
+The pipeline does not read doubtful pages a second and a third time, and it does not write revisar_a_mano.txt. Use lotes_auto.py for the complete work. On the 120 example documents, the pipeline gives the same quantities as lotes_auto.py; the tests check this after every change.
 
 ## Installation
 
@@ -346,6 +449,8 @@ cd ~/tute-lote && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-
 
 On FreeBSD, use `fetch` in the same way. On OpenBSD and NetBSD, use `ftp`.
 
+lotes_auto.py does not need the folder `etapas`. To use the pipeline of small programs, download the repository as a ZIP file from GitHub, or clone it with git, and keep the folder `etapas` next to lotes_auto.py.
+
 The project was called pdf-totals before. Installations that were made before the new name use the folder `pdf-totals` instead of `tute-lote`. They keep working: replace `tute-lote` with `pdf-totals` in the folder paths of the commands above, but not in the addresses.
 
 After a change, GitHub can deliver the previous version for a few minutes. To get a specific version immediately, replace `main` in the address with the identifier of the commit.
@@ -383,11 +488,13 @@ The program expects quantities to be whole numbers of pieces. It does not conver
 
 - lotes_auto.py is the program.
 - diagnostico.py is the diagnostic tool. It must be in the same folder as lotes_auto.py.
+- The folder `etapas` contains the pipeline of small programs. It must be in the same folder as lotes_auto.py.
 - requirements.txt lists the tested versions of the required Python packages. requirements-dev.txt adds the packages for the tests and for the example documents.
 - README.md is a short description. It is also available as README.de.md and README.es.md.
 - The folder `docs` contains this manual in English, German and Spanish, and the file `security-feeds.opml`. This file is a list of feeds with the releases of every Python package that the program uses. Import it into a feed reader to follow the updates.
 - The folder `examples` contains 120 invented PDF documents, a reference Excel file and the expected result in `expected.json`. See `examples/README.md`.
-- `tools/make_examples.py` creates the example documents. `tools/check_examples.py` runs the program on them and compares the result with the expected result.
+- `tools/make_examples.py` creates the example documents. `tools/check_examples.py` runs the program and the pipeline on them and compares the result with the expected result.
+- `tools/check_profiles.py` creates invented English, German and Spanish documents and checks the profiles `us`, `de` and `mx` and the sectors `food` and `automotive`.
 - `tools/translate_docs.py` translates the documentation.
 - `AGENTS.md` contains the rules for AI agents that run, test or change the program.
 - `SECURITY.md` describes how to report a vulnerability, and the security model.

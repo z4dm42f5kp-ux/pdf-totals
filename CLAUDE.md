@@ -3,7 +3,7 @@
 This file is for a future Claude Code session continuing work on this project. It
 records the user's situation, the business rules (as clarified by the user over a long
 conversation), the code architecture, the test setup, the lessons learned and the open
-items. Last updated: 2026-10-15, at commit `897e1a5` (lotes_auto.py v2.2.0).
+items. Last updated: 2026-10-17 (lotes_auto.py v2.3.0).
 
 ---
 
@@ -129,6 +129,8 @@ are common.
     Never edit them by hand. The bot pushes commits after every change to README.md or
     docs/en.
   - `CLAUDE.md`: this file (not translated).
+  - `etapas/`: the pipeline of small programs (issue #8), see 4.5.
+  - `tools/check_profiles.py`: invented en/de/es documents for the profiles (issue #5).
   - `AGENTS.md`: rules for AI agents (running, testing, PDF prompt injection, fetching).
   - `SECURITY.md`: vulnerability reporting, threat model, agent security model.
   - `RELEASES.txt`: stable (vN.0.x) and rolling (vN.M.x, M > 0) releases; how to tag.
@@ -161,6 +163,7 @@ Recent history:
 
 | Commit | Change |
 |---|---|
+| (2026-10-17) | v2.3.0: issue #5 profiles (`--perfil`, `--sector`, `tute-lote.json`), issue #8 pipeline `etapas/`, issue #16 answered with measurements. Default profile byte-identical to 2.2.0 |
 | (2026-10-15) | issues #1 #2 #3 #4 #6 #7 #9: rename docs to tute-lote, AGENTS.md, SECURITY.md, examples + CI tests, security CI + feeds, release process, logo (removed 2026-10-16 at the user's request). lotes_auto.py unchanged (2.2.0) |
 | 897e1a5 | v2.2: speed (parallel processes, cache, targeted re-reads, image cap, watchdog) |
 | a022f0e | third OCR reading, page images, safer choice of reading |
@@ -270,6 +273,8 @@ CLI options:
 - `--excel RUTA`;
 - `--procesos N` (0/omitted = automatic; 1 = no pool);
 - `--sin-cache`;
+- `--perfil traxicoll|mx|us|de|eu`, `--sector pharma|devices|food|cosmetics|automotive|consumer|chemicals|general`,
+  `--config RUTA` (default: `tute-lote.json` in the folder);
 - `--version`.
 
 Return codes: 0 = ok, 1 = the Excel output is open/locked, 2 = bad arguments, folder or
@@ -277,7 +282,38 @@ Excel.
 
 ---
 
-## 5. Performance work in v2.2 (the last task)
+### 4.4 Profiles, sectors and tute-lote.json (v2.3, issue #5)
+
+- `aplicar_perfil(nombre, sector, config)` is called once in `main` (and in diagnostico.py
+  and etapas/). With the default profile `traxicoll`, its sector `pharma` and no config it
+  changes **nothing** (the outputs of the private kit stayed byte-identical). It mutates
+  module globals, so call it once per process.
+- Other profiles (`mx`, `us`, `de`, `eu`) extend the Spanish vocabulary with `VOCABULARIO`
+  (en, de, fr, it): SEMANTICA, TIPO_DOCUMENTO, months, units, labels, Excel headers,
+  skip-name words. `NUMEROS = "auto"` accepts `1.234,56 €` money. They set expected totals
+  and Excel name to None, caps to infinity, and `LOTE_MAYUSCULAS = True` (batch numbers
+  compared in upper case).
+- Batch format for other profiles: config `batch_pattern` > sector `lote` (automotive =
+  VIN `[A-HJ-NPR-Z0-9]{17}`) > **list mode**: `LOTE_ID is None` until
+  `leer_excel_referencia` finds a column titled Lote/Lot/Batch/Charge/Los/Lotto and builds
+  an alternation of the exact batch numbers (`poner_patron_lote`). If none: exit 2.
+- `SECTORES` add count units and labels (GS1 `(10)`, `Ch.-B.`, `L`, VIN...). Excel titles
+  in English/German via `TEXTOS_EXCEL`.
+- Hook globals that keep the old behaviour by default: `FILA_TOTAL_RE`,
+  `TOTAL_PALABRA_RE`, `PIEZA_RE`, `CAJA_PREFIJOS`, `EXCEL_NOD_RE`, `EXCEL_RET_RE`,
+  `EXCEL_RET_EXCLUYE`, `CASI_LOTE_RE`, `RELEVANTE_RE`.
+- Research sources used for the vocabulary are listed in the comment above `PERFILES`.
+
+### 4.5 Pipeline in etapas/ (v2.3, issue #8)
+
+`paginas.py` (pages -> JSONL, parallel + same cache) | `texto.py` (text lines) |
+`cantidades.py` (analizar_documento per PDF) | `conciliar.py` (conciliar +
+intentar_arreglos without alternative readings) | `excel.py` (escribir_excel). JSON is
+`ensure_ascii` so it survives PowerShell 5.1 pipes. Messages go to stderr. lotes_auto.py
+stays the complete program; it is unchanged by etapas/. `tools/check_examples.py` also
+checks that the pipeline gives the same quantities as lotes_auto.py on the examples.
+
+## 5. Performance work in v2.2
 
 User report: "very very slow, basically hanged from 36/59 pdfs onward". Constraint: do
 **not** remove any checks.
@@ -394,7 +430,8 @@ Environments used, recreate them as needed:
 - Python 3.9 for a syntax check (no backslashes in f-string expressions; `cancel_futures`
   needs 3.9+).
 
-Run `python3 -m pyflakes lotes_auto.py diagnostico.py tools` before committing.
+Run `python3 -m pyflakes lotes_auto.py diagnostico.py tools etapas` before committing.
+`python tools/check_profiles.py` (about 30 s, one OCR page) checks the profiles.
 
 **In-repo test (no private kit needed):** `python tools/make_examples.py --check` and
 `python tools/check_examples.py` (about 6 minutes, 162 page reads, OCR on 20 scanned
@@ -457,10 +494,16 @@ Useful stress tests:
      need re-validation).
 4. Keep README.md and docs/en/MANUAL.md in sync with any new option or config. The
    translation bot updates de/es.
-5. Open GitHub issues not done yet: **#5** (support for other company sectors and
-   countries: Mexico, Germany, Europe, USA; open-ended, needs scoping with the user) and
-   **#8** (split into small Unix-style scripts that pipe into each other; a large
-   refactor of the program used mid-recall, so it must keep outputs byte-identical).
+5. GitHub issues: **#5** done as profiles/sectors/config (v2.3); more languages or
+   sectors can be added to `VOCABULARIO`/`SECTORES` with a case in
+   tools/check_profiles.py. **#8** done additively as etapas/ (lotes_auto.py was not
+   split, so the user's two-file update still works). **#16** (switch time-critical
+   scripts to another language): measured on the 120 examples, cold run 215 s wall,
+   374 s worker CPU (OCR/render in onnxruntime, pdfium, Pillow, OpenCV: C/C++), 4.5 s
+   Python in the main process; cached run 3.3 s. A rewrite cannot gain more than about
+   2 %. Answered on the issue. Dependabot PRs #10-#15 were left for the user: #11-#15
+   (action bumps) passed CI; #10 (Docker python 3.14) would switch the OCR engine to
+   rapidocr 3.x (other results than the user's 3.12 on Windows), so keep 3.12.
 6. Single-row OCR recovery: when the pieces cell of a one-row table is lost but the
    printed TOTAL DE PIEZAS and price x pieces = amount agree, the quantity could be
    recovered exactly (see the known difference in examples/). Needs a VERSION bump and

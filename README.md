@@ -72,6 +72,20 @@ The program reads several pages at the same time, one for each processor core. T
 
 To see what the program reads and detects in one PDF, run diagnostico.py with the path of the PDF. diagnostico.py does not write any files.
 
+## Other countries, languages and sectors
+
+The default profile is the current withdrawal. The option `--perfil` selects documents from Mexico (`mx`), the United States (`us`), Germany (`de`) or the European Union (`eu`), and the option `--sector` selects the sector of the products, for example `food`, `devices`, `cosmetics` or `automotive`. A file `tute-lote.json` in the folder sets the format of the batch numbers, the expected totals and the limits. The manual describes the profiles, the sectors and the configuration file.
+
+## Small programs that work together
+
+The folder `etapas` contains small programs that each do one thing and are connected with pipes: read the pages, show their text, find the quantities, add them up and check them, and write the Excel file:
+
+```
+python etapas/paginas.py /path/to/pdfs | python etapas/cantidades.py --carpeta /path/to/pdfs | python etapas/conciliar.py --carpeta /path/to/pdfs | python etapas/excel.py -o totales.xlsx
+```
+
+lotes_auto.py remains the complete program. It also reads doubtful pages again and writes revisar_a_mano.txt.
+
 ## Documentation
 
 The manual describes all options, the supported layouts, the output files, the settings, and the installation on each system:
@@ -84,7 +98,7 @@ The German and Spanish documents are translated automatically from the English d
 
 ## Example documents and tests
 
-The folder `examples` contains 120 invented PDF documents, a reference Excel file and the expected result. Use them to try the program without real documents. The command `python tools/check_examples.py` runs the program on these documents and compares the result with the expected result. The automatic tests on GitHub run the same command after every change.
+The folder `examples` contains 120 invented PDF documents, a reference Excel file and the expected result. Use them to try the program without real documents. The command `python tools/check_examples.py` runs the program and the pipeline on these documents and compares the result with the expected result. The command `python tools/check_profiles.py` checks the profiles for other countries and sectors. The automatic tests on GitHub run the same command after every change.
 
 ## Releases and security
 

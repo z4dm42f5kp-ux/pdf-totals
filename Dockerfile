@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir --root-user-action=ignore -r /app/requirements.tx
  && useradd --create-home --uid 1000 lotes
 
 COPY lotes_auto.py diagnostico.py LICENSE /app/
+COPY etapas /app/etapas
 
 USER lotes
 WORKDIR /data

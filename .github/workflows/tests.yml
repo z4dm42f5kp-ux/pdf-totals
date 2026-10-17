@@ -55,7 +55,7 @@ jobs:
 
       - name: Keep the output files when the check fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: check_examples_output
           path: check_examples_output/

@@ -12,15 +12,15 @@ tute-lote liest einen Ordner mit PDF-Dokumenten über die Rücknahme eines Produ
 
 Das Programm verlässt sich nicht nur auf die Wörter in den Dokumenten. Es untersucht die Struktur jeder Tabelle: welche Spalte ganze Zahlen enthält, welche Spalte multipliziert mit dem Stückpreis den gedruckten Gesamtpreis ergibt und welche Spalte sich zu einer gedruckten Gesamtsumme addiert. In einem Rückzugsbericht findet es die Spalten nach Arithmetik, weil hergestellt minus verteilt gleich nicht verteilt ist, und nicht verteilt plus zurückgezogen gleich der Summe.
 
-Die zurückgezogene Menge jeder Charge wird mit der Excel-Referenzdatei verglichen. Keine einzelne Charge darf entfernte `48,042`-Stücke oder nicht verteilte `82,090`-Stücke überschreiten. Die zurückgezogenen Stücke müssen sich zu genau `209,908` addieren, die nicht verteilten Stücke zu genau `134,543` und die Summe für die Zerstörung zu genau `344,451`. Wenn etwas nicht übereinstimmt, werden zweifelhafte gescannte PDFs ein zweites Mal gelesen, Differenzen werden nur dann korrigiert, wenn ein exakter Beweis vorliegt, und PDFs werden nur nach schlüssigen Beweisen als schlecht markiert.
+Die zurückgezogene Menge jeder Charge wird mit der Excel-Referenzdatei verglichen. Keine einzelne Charge darf entfernte `48,042`-Stücke oder nicht verteilte `82,090`-Stücke überschreiten. Die zurückgezogenen Stücke müssen sich zu genau `209,908` addieren, die nicht verteilten Stücke zu genau `134,543` und die Summe für die Zerstörung zu genau `344,451`. Wenn etwas nicht übereinstimmt, werden zweifelhafte gescannte PDFs ein zweites Mal gelesen, Differenzen werden nur dann korrigiert, wenn ein genauer Beweis vorliegt, und PDFs werden nur nach schlüssigen Beweisen als schlecht markiert.
 
 Das Programm liest den Text von PDFs, die Text enthalten, und liest gescannte PDFs mit optischer Zeichenerkennung (OCR). Es wurde für Dokumente über zurückgegebene pharmazeutische Produkte in Mexiko geschrieben. Seine Nachrichten und Ausgabedateien sind in Spanisch. Eine Chargennummer muss genau acht Ziffern haben und mit `25` oder `26` beginnen. Diese Regeln sind leicht zu ändern.
 
 ## Anforderungen
 
 - Python 3.9 oder eine neuere Version. `Python 3.12` wird empfohlen, da die bevorzugte OCR-Engine Python-Versionen bis `Python 3.12` unterstützt.
-- Die Python-Pakete pdfplumber und openpyxl.
-- Für gescannte PDFs: das Paket rapidocr_onnxruntime mit `Python 3.12` oder einer älteren Version oder die Pakete rapidocr und onnxruntime mit `Python 3.13` oder einer neueren Version.
+- Die Python Pakete pdfplumber und openpyxl.
+- Für gescannte PDFs: das Paket rapidocr_onnxruntime mit `Python 3.12` oder einer älteren Version, oder die Pakete rapidocr und onnxruntime mit `Python 3.13` oder einer neueren Version.
 
 Unter Windows und macOS benötigen Sie keine Administratorrechte. Unter Linux und auf den BSD-Systemen muss der root-Benutzer Python aus den Paketen des Systems installieren. Unter Linux können Sie dies mit dem Programm uv vermeiden, wie das Handbuch beschreibt.
 
@@ -66,13 +66,27 @@ Das Programm durchsucht auch alle Unterordner. Es überspringt jede Datei, deren
 
 - totales_lotes.xlsx enthält drei Tabellen nebeneinander auf einem Blatt: zurückgezogen, nicht verteilt und insgesamt zur Zerstörung, jeweils mit der Chargennummer und der Stückzahl.
 - detalle_lotes.txt listet jede Menge jeder Charge, das PDF, das sie enthält und ob sie verifiziert ist.
-- revisar_a_mano.txt listet die als schlecht markierten PDFs, die Korrekturen, die Chargen, die nicht übereinstimmen, die verdächtigen PDFs und die PDFs, aus denen keine Menge gelesen werden konnte.
+- revisar_a_mano.txt listet die als schlecht markierten PDFs, die Korrekturen, die nicht übereinstimmenden Chargen, die verdächtigen PDFs und die PDFs auf, aus denen keine Menge gelesen werden konnte.
 - sin_resultado.log enthält den Text, der aus jedem PDF gelesen wurde, das keine Menge produziert hat.
 - Der Ordner-Cache enthält, was von jeder Seite gelesen wurde. Der nächste Lauf verwendet es, also dauert es Sekunden statt Minuten.
 
 Das Programm liest mehrere Seiten gleichzeitig, eine für jeden Prozessorkern. Die Option `--procesos 1` liest eine Seite nach der anderen. Die Option `--sin-cache` liest jede Seite erneut.
 
 Um zu sehen, was das Programm in einem PDF liest und erkennt, führen Sie diagnostico.py mit dem Pfad des PDF aus. diagnostico.py schreibt keine Dateien.
+
+## Sonstige Länder, Sprachen und Sektoren
+
+Das Standardprofil ist die aktuelle Auszahlung. Die Option `--perfil` wählt Dokumente aus Mexiko (`mx`), den Vereinigten Staaten (`us`), Deutschland (`de`) oder der Europäischen Union (`eu`) und die Option `--sector` wählt den Sektor der Produkte aus, beispielsweise `food`, `devices`, `cosmetics` oder `automotive`. Eine Datei `tute-lote.json` im Ordner legt das Format der Chargennummern, die erwarteten Summen und die Grenzen fest. Das Handbuch beschreibt die Profile, die Sektoren und die Konfigurationsdatei.
+
+## Kleine Programme, die zusammenarbeiten
+
+Der Ordner `etapas` enthält kleine Programme, die jeweils eine Sache tun und mit Pipes verbunden sind: Lesen Sie die Seiten, zeigen Sie ihren Text, finden Sie die Mengen, addieren und überprüfen Sie sie und schreiben Sie die Excel-Datei:
+
+```
+python etapas/paginas.py /path/to/pdfs | python etapas/cantidades.py --carpeta /path/to/pdfs | python etapas/conciliar.py --carpeta /path/to/pdfs | python etapas/excel.py -o totales.xlsx
+```
+
+lotes_auto.py bleibt das komplette Programm. Es liest auch wieder zweifelhafte Seiten und schreibt revisar_a_mano.txt.
 
 ## Dokumentation
 
@@ -86,7 +100,7 @@ Die deutschen und spanischen Dokumente werden automatisch aus den englischen Dok
 
 ## Beispieldokumente und Tests
 
-Der Ordner `examples` enthält 120 erfundene PDF-Dokumente, eine Excel-Referenzdatei und das erwartete Ergebnis. Verwenden Sie sie, um das Programm ohne echte Dokumente auszuprobieren. Der Befehl `python tools/check_examples.py` führt das Programm auf diesen Dokumenten aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis. Die automatischen Tests auf GitHub führen nach jeder Änderung den gleichen Befehl aus.
+Der Ordner `examples` enthält 120 erfundene PDF-Dokumente, eine Excel-Referenzdatei und das erwartete Ergebnis. Verwenden Sie sie, um das Programm ohne echte Dokumente auszuprobieren. Der Befehl `python tools/check_examples.py` führt das Programm und die Pipeline auf diesen Dokumenten aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis. Der Befehl `python tools/check_profiles.py` prüft die Profile für andere Länder und Sektoren. Die automatischen Tests auf GitHub führen nach jeder Änderung den gleichen Befehl aus.
 
 ## Freigaben und Sicherheit
 

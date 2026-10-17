@@ -4,15 +4,16 @@ Diese Datei wurde automatisch aus dem englischen Original mit Argos Translate ü
 
 ## Name
 
-lotes_auto.py - Berechnen Sie für jede Chargennummer die Stücke, die zurückgezogen wurden, die Stücke, die nicht verteilt wurden und die Gesamtzahl der Stücke zur Zerstörung
+lotes_auto.py - Berechnen Sie für jede Chargennummer die Stücke, die zurückgezogen wurden, die Stücke, die nicht verteilt wurden, und die Gesamtzahl der Stücke zur Zerstörung
 
 diagnostico.py - zeigen, was lotes_auto.py in einem oder mehreren PDF-Dokumenten liest und erkennt
 
 ## Synopsis
 
 ```
-python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
+python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] [--perfil PROFILE] [--sector SECTOR] [--config PATH] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] [--perfil PROFILE] [--sector SECTOR] [--config PATH] [--excel PATH] PATH
+python etapas/paginas.py PATH... | python etapas/cantidades.py | python etapas/conciliar.py --carpeta FOLDER | python etapas/excel.py -o FILE
 ```
 
 ## Beschreibung
@@ -23,7 +24,7 @@ lotes_auto.py liest alle PDF-Dateien im Ordner FOLDER und in allen Unterordnern.
 - Die nicht verteilte Menge (`Cantidad no distribuida`). Dies sind die Stücke, die noch im Bestand sind und nie verteilt wurden. Sie stammen aus der Excel-Referenzdatei, die unten beschrieben wird. Ohne die Excel-Referenzdatei stammen sie aus Inventardokumenten und aus dem Auszahlungsbericht.
 - Die Gesamtmenge für die Zerstörung (`Cantidad total para destrucción`). Dies ist die Summe der beiden anderen Mengen.
 
-Das Programm überprüft dann das Ergebnis. Die Grenzwerte gelten für jede Charge selbst, nicht für die Summe einer Tabelle: Keine einzelne Charge darf mehr als `48,042`-Stücke oder mehr als `82,090`-Stücke haben, die nicht verteilt wurden. Die entnommenen Mengen aller Chargen müssen sich zu genau `209,908`, die nicht verteilten Mengen zu genau `134,543` und die Summe für die Zerstörung zu genau `344,451` addieren. Diese Werte können in der Konfiguration oder auf der Kommandozeile geändert werden.
+Das Programm überprüft dann das Ergebnis. Die Grenzwerte gelten für jede Charge allein, nicht für die Summe einer Tabelle: Keine einzelne Charge darf mehr als `48,042`-Stücke oder mehr als `82,090`-Stücke haben, die nicht verteilt wurden. Die entnommenen Mengen aller Chargen müssen sich zu genau `209,908`, die nicht verteilten Mengen zu genau `134,543` und die Summe für die Zerstörung zu genau `344,451` addieren. Diese Werte können in der Konfiguration oder auf der Kommandozeile geändert werden.
 
 ## Die Excel-Referenzdatei
 
@@ -58,7 +59,7 @@ Ein Rückzugsbericht wird allein durch Arithmetik erkannt. In einem Auszahlungsb
 
 Das Programm findet die Spalten, die diese Beziehungen erfüllen, so dass die Spaltentitel nicht benötigt werden. Die zurückgezogene Spalte ist diejenige, die niemals größer ist als die verteilte Spalte. Wenn eine Zeile des Berichts die Relationen nicht erfüllt, z. B. weil die OCR eine Ziffer falsch gelesen hat, verwendet das Programm die Relationen, um den richtigen Wert wiederherzustellen.
 
-Die Art jeder Menge wird wie folgt festgelegt. Eine Größe wird nicht verteilt, wenn ihr Spaltentitel oder Zeilentitel dies sagt, zum Beispiel `EXISTENCIA`, `INVENTARIO` oder `NO DISTRIBUIDO`. Ansonsten entscheiden die Worte der ganzen Seite: Seiten über Rückgaben, Auszahlungen oder Quittungen geben zurückgezogene Mengen an, und Seiten über Inventar geben keine verteilten Mengen an. Wenn eine Seite keinen eindeutigen Typ hat, wird der Typ der anderen Seiten derselben PDF verwendet. Wenn das PDF keinen eindeutigen Typ hat, zählt die Menge als zurückgezogen und eine Notiz wird hinzugefügt.
+Die Art der einzelnen Mengen wird wie folgt festgelegt. Eine Größe wird nicht verteilt, wenn ihr Spaltentitel oder Zeilentitel dies sagt, zum Beispiel `EXISTENCIA`, `INVENTARIO` oder `NO DISTRIBUIDO`. Ansonsten entscheiden die Worte der ganzen Seite: Seiten über Rückgaben, Auszahlungen oder Quittungen geben zurückgezogene Mengen an, und Seiten über Inventar geben keine verteilten Mengen an. Wenn eine Seite keinen eindeutigen Typ hat, wird der Typ der anderen Seiten derselben PDF verwendet. Wenn das PDF keinen eindeutigen Typ hat, zählt die Menge als zurückgezogen und eine Notiz wird hinzugefügt.
 
 Das Programm liest auch zwei andere Layouts:
 
@@ -67,27 +68,27 @@ Das Programm liest auch zwei andere Layouts:
 
 ## Kontrollen und Berichtigungen
 
-Jede Menge wird als überprüft oder nicht überprüft gekennzeichnet. Eine Menge wird überprüft, wenn die mit dem Stückpreis multiplizierte Stückzahl dem gedruckten Gesamtpreis entspricht, wenn die Summe ihrer Tabelle einer gedruckten Gesamtmenge entspricht oder wenn die Summe ihrer Charge der Rücknahmemeldung entspricht.
+Jede Menge wird als verifiziert oder nicht verifiziert gekennzeichnet. Eine Menge wird überprüft, wenn die mit dem Stückpreis multiplizierte Stückzahl dem gedruckten Gesamtpreis entspricht, wenn die Summe ihrer Tabelle einer gedruckten Gesamtmenge entspricht oder wenn die Summe ihrer Charge der Rücknahmemeldung entspricht.
 
-Wenn eine Tabelle ihrer eigenen gedruckten Stückzahl widerspricht und genau eine Zeile nicht verifiziert wird, berechnet das Programm aus der gedruckten Summe den richtigen Wert dieser Zeile. Er verwendet den korrigierten Wert nur, wenn der gedruckte Gesamtpreis ihn bestätigt. Ansonsten wird das PDF als schlecht markiert.
+Wenn eine Tabelle ihrer eigenen gedruckten Stückzahl widerspricht und genau eine Zeile nicht verifiziert wird, berechnet das Programm aus der gedruckten Summe den korrekten Wert dieser Zeile. Er verwendet den korrigierten Wert nur, wenn der gedruckte Gesamtpreis ihn bestätigt. Ansonsten wird das PDF als schlecht markiert.
 
-Zwei Seiten desselben PDFs, die genau die gleichen Chargennummern enthalten, werden als dasselbe Dokument behandelt, beispielsweise ein Rücksendeformular und dessen detaillierte Liste, oder die gleiche Quittung zweimal gedruckt. Nur eine der beiden Seiten wird gezählt. Das Programm bevorzugt die Seite, deren Summe mit der eigenen gedruckten Gesamtsumme übereinstimmt. Wenn die beiden Seiten für eine Charge nicht übereinstimmen, verwendet das Programm die Kopie, die mit der Referenz-Excel-Datei übereinstimmt.
+Zwei Seiten desselben PDFs, die genau die gleichen Chargennummern enthalten, werden als dasselbe Dokument behandelt, z. B. ein Rücksendeformular und dessen detaillierte Liste oder die gleiche Quittung zweimal gedruckt. Nur eine der beiden Seiten wird gezählt. Das Programm bevorzugt die Seite, deren Summe mit der eigenen gedruckten Gesamtsumme übereinstimmt. Wenn die beiden Seiten für eine Charge nicht übereinstimmen, verwendet das Programm die Kopie, die mit der Referenz-Excel-Datei übereinstimmt.
 
 Ein Charge, der auf mehreren anderen Seiten derselben PDF erscheint, wird einmal gezählt, wenn die Menge gleich ist. Eine Seite, deren Menge die Summe der anderen Seiten ist, wird nicht gezählt. Wenn der gleiche Charge auf mehreren Seiten mit unterschiedlichen Mengen erscheint, werden die Mengen hinzugefügt und das PDF zur Überprüfung aufgelistet. Es werden immer mehrere Zeilen des gleichen Chargen auf derselben Seite hinzugefügt, da es sich um separate Zeilen des Dokuments handelt, zum Beispiel unterschiedliche Rechnungen.
 
-Wenn ein Charge seinen Grenzwert überschreitet, nicht mit dem Auszahlungsbericht übereinstimmt oder die Gesamtsumme nicht mit der erwarteten Gesamtsumme übereinstimmt, liest das Programm die zweifelhaften Seiten der zweifelhaft gescannten PDFs noch zweimal. Eine zweifelhafte Seite ist eine gescannte Seite mit einer Menge, die nicht verifiziert ist, die eine fehlgeschlagene Überprüfung hat, die zu einer Charge gehört, die nicht übereinstimmt oder deren Chargennummer nicht in der Excel-Datei enthalten ist; eine Seite eines Auszahlungsberichts, dessen Zeile nicht übereinstimmt; und eine Seite ohne Mengen, die Chargen oder Teile erwähnt, die mit einem geringen Vertrauen gelesen wurde oder von der fast nichts gelesen wurde. Seiten, deren Mengen alle überprüft werden, werden nicht erneut gelesen, weil eine andere Lesung sie nicht verbessern kann. Wenn ein PDF überhaupt keine Menge produziert, werden alle gescannten Seiten erneut gelesen. Die zweite Lesung verwendet eine höhere Auflösung und mehr Kontrast. Die dritte Lesung vergrößert das Bild auf das Doppelte und schärft es, was bei kleinem oder verschwommenem Text hilft. Das Programm hält die Lesung mit den meisten verifizierten Mengen und hält die anderen Lesungen für den nächsten Schritt. Dann versucht es, jeden Unterschied genau und ohne Zweideutigkeit zu erklären:
+Wenn ein Charge seine Grenze überschreitet, nicht mit dem Auszahlungsbericht übereinstimmt oder die Gesamtsumme nicht mit der erwarteten Gesamtsumme übereinstimmt, liest das Programm die zweifelhaften Seiten der zweifelhaft gescannten PDFs noch zweimal. Eine zweifelhafte Seite ist eine gescannte Seite mit einer Menge, die nicht verifiziert ist, die eine fehlgeschlagene Überprüfung hat, die zu einer Charge gehört, die nicht übereinstimmt oder deren Chargennummer nicht in der Excel-Datei enthalten ist; eine Seite eines Auszahlungsberichts, deren Zeile nicht übereinstimmt; und eine Seite ohne Mengen, die Chargen oder Teile erwähnt, die mit einem geringen Vertrauen gelesen wurde oder von der fast nichts gelesen wurde. Seiten, deren Mengen alle überprüft werden, werden nicht erneut gelesen, da eine andere Lesung sie nicht verbessern kann. Wenn ein PDF überhaupt keine Menge produziert, werden alle gescannten Seiten erneut gelesen. Die zweite Lesung verwendet eine höhere Auflösung und mehr Kontrast. Die dritte Lesung vergrößert das Bild auf das Doppelte und schärft es, was bei kleinem oder verschwommenem Text hilft. Das Programm hält die Lesung mit den meisten verifizierten Mengen und hält die anderen Lesungen für den nächsten Schritt. Dann versucht es, jeden Unterschied genau und ohne Zweideutigkeit zu erklären:
 
-- Wenn die andere Lektüre von genau einem PDF die Charge-Match macht, wird diese Lektüre verwendet.
+- Wenn das andere Lesen von genau einem PDF die Charge-Übereinstimmung macht, wird dieses Lesen verwendet.
 - Wenn eine Zeile in einem PDF eine exakte Kopie einer Zeile in einem anderen PDF ist und die Charge beim Entfernen der Kopie übereinstimmt, wird die Kopie nicht gezählt.
 - Wenn eine Größe eine Chargennummer hat, die nicht in der Excel-Referenzdatei enthalten ist, sich von einer Charge in der Excel-Datei um eine Ziffer oder um zwei getauschte Ziffern unterscheidet und diese Charge genau übereinstimmt, wird die Chargennummer korrigiert.
 - Wenn ein Stiftstrich oder Häkchen neben einer Zahl als zusätzliche Ziffer 1, 7 oder 4 gelesen wurde und das Entfernen es die Charge genau zusammenpasst, wird die Zahl korrigiert.
 - Wenn das andere Lesen von genau einem PDF oder das Entfernen von genau einer kopierten Zeile die zurückgezogene Summe genau der erwarteten Summe entspricht, wird diese Änderung angewendet.
 
-Ein PDF wird nur dann als schlecht markiert, wenn der Beweis schlüssig ist: wenn seine eigenen Zahlen in jeder Lesung seinen eigenen gedruckten Gesamtwerten widersprechen oder wenn es eine genaue Kopie enthält, die durch eine Charge oder durch die erwartete Gesamtsumme bewiesen wird. Alle anderen Zweifel werden als verdächtig aufgeführt und nicht verändert.
+Ein PDF wird nur dann als schlecht markiert, wenn der Beweis schlüssig ist: wenn seine eigenen Zahlen in jeder Lesung seinen eigenen gedruckten Summen widersprechen oder wenn es eine exakte Kopie enthält, die durch eine Charge oder durch die erwartete Summe bewiesen wird. Alle anderen Zweifel werden als verdächtig aufgelistet und nicht verändert.
 
 ## Regeln für jeden Wert
 
-- Eine Chargennummer hat genau acht Stellen und beginnt mit `25` oder `26`. Das Programm ignoriert alle anderen Zahlen, zum Beispiel Preise, Daten, Rechnungsnummern und Produktcodes. Wenn die OCR andere Zeichen an eine Chargennummer anhängt, z. B. einen vertikalen Balken, entfernt das Programm sie. Wenn die OCR eine handschriftliche Chargennummer in zwei Teile teilt, werden die Teile wieder zusammengefügt.
+- Eine Chargennummer hat genau acht Stellen und beginnt mit `25` oder `26`. Das Programm ignoriert alle anderen Zahlen, zum Beispiel Preise, Daten, Rechnungsnummern und Produktcodes. Wenn die OCR andere Zeichen an eine Chargennummer anhängt, z. B. einen vertikalen Balken, entfernt das Programm sie. Wenn der OCR eine handschriftliche Chargennummer in zwei Teile teilt, werden die Teile wieder zusammengefügt.
 - Das Programm liest Zahlen in mexikanischer Notation. Ein Komma trennt die Tausende und ein Punkt trennt die Dezimalzahlen. Zum Beispiel ist `1,250` eintausendzweihundertfünfzig, und `1,250.50` ist eintausendzweihundertfünfzigeinhalb. Eine Zahl wie `4.408`, bei der die OCR das Komma als Punkt liest, wird als `4,408` gelesen, da Stücke immer ganze Zahlen sind.
 - Handschriftliche Häkchen und Striche neben einer Zahl, wie `695 ✓` oder `/ 630`, werden ignoriert.
 - Eine Spalte, deren Titel einen Grund, einen Code, ein Folio oder eine Rechnung nennt, wird nicht als Menge verwendet, und auch keine Spalte mit dem gleichen Wert in jeder Zeile.
@@ -104,6 +105,9 @@ Optionen von lotes_auto.py:
 - `--total-esperado N` legt die erwartete Gesamtmenge für die Zerstörung fest. Der Standardwert ist `344,451`. Der Wert 0 schaltet den Check ab.
 - `--procesos N` liest N Seiten gleichzeitig, in N separaten Prozessen. Der Standard ist automatisch: ein Prozess für jeden Prozessorkern, höchstens 8, und nicht mehr als der freie Speicher erlaubt (ca. 1,2 GB für jeden Prozess). Der Wert 1 liest eine Seite nach der anderen in einem einzigen Prozess.
 - `--sin-cache` liest jede Seite erneut, auch wenn sie sich im Cache befindet (siehe unten).
+- `--perfil PROFILE` wählt das Land und die Sprachen der Dokumente aus. Der Standard ist `traxicoll`, die aktuelle Auszahlung. Siehe den Abschnitt über andere Länder, Sprachen und Sektoren.
+- `--sector SECTOR` wählt den Sektor der Produkte aus: `pharma`, `devices`, `food`, `cosmetics`, `automotive`, `consumer`, `chemicals` oder `general`.
+- `--config PATH` liest die Einstellungen aus dieser Konfigurationsdatei. Ohne diese Option liest das Programm die Datei `tute-lote.json` im Ordner FOLDER, falls vorhanden.
 - `--version` zeigt die Versionsnummer an. Das Programm stoppt dann.
 - `-h` oder `--help` zeigt einen kurzen Hilfetext. Das Programm stoppt dann.
 
@@ -112,6 +116,8 @@ Optionen von diagnostico.py:
 - `PATH` ist eine einzelne PDF-Datei oder ein Ordner. Wenn es sich um einen Ordner handelt, untersucht das Programm alle darin enthaltenen PDF-Dateien.
 - `--lineas N` zeigt nicht mehr als N Textzeilen für jedes PDF. Der Standardwert ist 40.
 - `--lectura N` verwendet OCR-Lesung N: 1 ist der normale Messwert, 2 verwendet eine höhere Auflösung und mehr Kontrast und 3 vergrößert und schärft das Bild.
+- `--perfil`, `--sector` und `--config` funktionieren wie in lotes_auto.py. Ohne `--config` liest diagnostico.py `tute-lote.json` im Ordner von PATH, wenn es existiert.
+- `--excel PATH` verwendet diese Excel-Referenzdatei. Es wird nur benötigt, wenn das Format der Chargennummern aus der Excel-Datei stammt.
 - `--version` zeigt die Versionsnummer an. Das Programm stoppt dann.
 - `-h` oder `--help` zeigt einen kurzen Hilfetext. Das Programm stoppt dann.
 
@@ -125,7 +131,7 @@ lotes_auto.py erstellt den Ordner `resultados_lotes` innerhalb des Ordners FOLDE
 
 `revisar_a_mano.txt` listet alles, was eine Person braucht, in nummerierten Abschnitten auf: eine Zusammenfassung mit den drei Summen und ihren erwarteten Werten; eine Liste von Aktionen in der Reihenfolge, in der sie durchgeführt werden sollten; die Chargen, die nicht übereinstimmen, mit jeder Menge, die für sie gefunden wurde, die PDFs ohne lesbare Mengen, die sie erwähnen, die übersprungenen `FALTA REVISION`-Dateien, die sie erwähnen, und eine Notiz, wenn eine solche Datei genau die fehlende Menge enthält; die Chargen der Excel-Datei ohne PDF; die Mengen, deren Chargennummer nicht in der Excel-Datei ist, mit dem ähnlichsten Charge der Excel-Datei; für jedes PDF ohne lesbare Mengen die Anzahl der Seiten, das OCR-Vertrauen, der Grund, die Batchs, die Zahlen, die falsch gelesen werden könnten Chargennummern, die ersten Textzeilen und was zu tun ist; die PDFs, die als schlecht markiert sind; die Korrekturen; die verdächtigen PDFs; die Wiederholungen in einem PDF; die gleichen Charge und Menge in mehreren PDFs; die übersprungenen Dateien mit ihren Mengen für Informationen; und eine Liste aller PDFs mit ihrem
 
-Die Dateien, deren Name `FALTA REVISION` enthält, werden nur gelesen, um zu berichten, was sie enthalten. Sie zählen nie zu einem Total.
+Die Dateien, deren Name `FALTA REVISION` enthält, werden nur gelesen, um zu melden, was sie enthalten. Sie zählen nie zu einem Total.
 
 Der Ordner `paginas` enthält ein Bild (PNG) jeder Seite, die eine Person benötigt: Seiten ohne lesbare Mengen, Seiten mit Mengen von Stapeln, die nicht übereinstimmen, verdächtige Mengen, korrigierte Mengen, Mengen mit einer Stapelnummer, die sich nicht in der Excel-Datei befindet, und Seiten von PDFs, die als schlecht markiert sind. revisar_a_mano.txt benennt das Bild neben jedem Problem, so dass eine Seite überprüft werden kann, ohne das PDF zu öffnen. Die Bilder können nicht auf FreeBSD, OpenBSD und NetBSD erstellt werden.
 
@@ -135,13 +141,13 @@ Der Ordner `cache` enthält, was von jeder Seite gelesen wurde, eine kleine Date
 
 ## Konsolennachrichten
 
-Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an, wenn alle Seiten gelesen wurden. Da mehrere Seiten gleichzeitig gelesen werden, werden die PDFs nicht immer in alphabetischer Reihenfolge angezeigt. In Klammern zeigt die Zeile die Anzahl der Seiten und die Sekunden, die zum Lesen benötigt wurden, oder `cache`, wenn die Seiten aus dem Cache kamen. Der Text nach dem Pfeil sagt, wie viele zurückgezogene und nicht verteilte Mengen gelesen wurden, ob es sich bei dem PDF um einen Entnahmebericht handelt und ob der Text direkt (`texto`) oder mit OCR (`OCR`) gelesen wurde. Weitere Meldungen:
+Während es läuft, zeigt lotes_auto.py eine Zeile für jedes PDF an, wenn alle Seiten gelesen wurden. Da mehrere Seiten gleichzeitig gelesen werden, werden die PDFs nicht immer in alphabetischer Reihenfolge angezeigt. In Klammern zeigt die Zeile die Anzahl der Seiten und die Sekunden, die zum Lesen benötigt wurden, oder `cache`, wenn die Seiten aus dem Cache kamen. Der Text hinter dem Pfeil sagt, wie viele zurückgezogene und nicht verteilte Mengen gelesen wurden, ob das PDF ein Rückzugsbericht ist und ob der Text direkt (`texto`) oder mit OCR (`OCR`) gelesen wurde. Weitere Meldungen:
 
 - `-> omitido (FALTA REVISION)` bedeutet, dass das Programm die Datei aufgrund ihres Namens übersprungen hat.
 - `-> escaneado, OCR no disponible` bedeutet, dass das PDF gescannt wird und keine OCR-Engine installiert ist.
 - `-> ERROR` bedeutet, dass das Programm die Datei nicht öffnen oder lesen konnte.
 - `Nuevas lecturas` bedeutet, dass das Programm die zweifelhaften Seiten der zweifelhaft gescannten PDFs erneut liest. Jede Zeile benennt die Seiten, die erneut gelesen wurden.
-- `... sigue leyendo` bedeutet, dass eine Seite lange gedauert hat. Es wird alle 45 Sekunden beim Lesen der Seite mit dem PDF und der Seitenzahl angezeigt, so dass eine langsame Seite gefunden werden kann.
+- `... sigue leyendo` bedeutet, dass eine Seite lange gedauert hat. Es wird alle 45 Sekunden während des Lesens der Seite mit dem PDF und der Seitenzahl angezeigt, so dass eine langsame Seite gefunden werden kann.
 - `*** ... se deja sin leer` bedeutet, dass eine Seite mehr als 600 Sekunden dauerte. Das Programm hört auf, diese Seite zu lesen, fährt mit den anderen Seiten fort und listet das PDF in revisar_a_mano.txt mit dem Grund auf. Die Seite wird im nächsten Durchlauf erneut gelesen.
 - `Tiempo` am Ende zeigt die Dauer des Laufs, die Anzahl der Seiten, die gelesen wurden, und die Anzahl der Seiten, die aus dem Cache kamen.
 
@@ -149,7 +155,7 @@ Am Ende zeigt das Programm die drei Summen und vergleicht die Summe für die Zer
 
 ## Rückgabewerte des Programms
 
-- `0` bedeutet, dass das Programm beendet ist. Überprüfen Sie die Zusammenfassung, um zu sehen, ob die Summen übereinstimmen.
+- `0` bedeutet, dass das Programm beendet ist. Überprüfen Sie die Zusammenfassung, um zu sehen, ob die Gesamtsummen übereinstimmen.
 - `1` bedeutet, dass das Programm die Excel-Datei nicht schreiben konnte. Normalerweise ist die Datei in Excel geöffnet.
 - `2` bedeutet, dass die Argumente nicht gültig sind oder dass der Ordner nicht existiert.
 
@@ -165,7 +171,7 @@ Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können s
 
 `EXCEL_REFERENCIA` ist der Pfad der Excel-Referenzdatei. Der Standardwert `None` bedeutet, dass die Datei im Ordner und seinen Unterordnern durchsucht wird. `SOLO_LOTES_DEL_EXCEL` entscheidet, ob Mengen mit einer Chargennummer, die nicht in der Excel-Datei enthalten ist, ausgelassen werden. Der Standardwert ist `True`.
 
-`USAR_REPORTE_PARA_RETIRADO` entscheidet, wie die zurückgezogenen Mengen eines Auszahlungsberichts verwendet werden. Mit dem Standardwert `False` werden sie nur zur Überprüfung der Rücksendedokumente verwendet. Mit `True` werden sie auch für Chargen verwendet, die kein Rückgabedokument im Ordner haben.
+`USAR_REPORTE_PARA_RETIRADO` entscheidet, wie die zurückgenommenen Mengen eines Rücknahmeberichts verwendet werden. Mit dem Standardwert `False` werden sie nur zur Überprüfung der Rücksendedokumente verwendet. Mit `True` werden sie auch für Chargen verwendet, die kein Rückgabedokument im Ordner haben.
 
 `DUPLICADOS_EN_ARCHIVO` entscheidet, wie ein Charge, der im selben PDF wiederholt wird, gezählt wird. Mit dem Standardwert `iguales` wird er nur einmal gezählt, wenn die Mengen gleich sind. Mit `todos` wird es immer einmal gezählt und die größte Menge gehalten.
 
@@ -173,13 +179,110 @@ Die Einstellungen befinden sich am Anfang der Datei lotes_auto.py. Sie können s
 
 `LOTE_ID` ist das Muster für eine gültige Chargennummer. Der Standardwert akzeptiert genau acht Ziffern, die mit `25` oder `26` beginnen. Um beispielsweise auch Chargennummern zu akzeptieren, die mit `24` beginnen, ändern Sie `2[56]` in `2[456]`.
 
-`OCR_DPI` ist die Auflösung des ersten und dritten OCR-Messwerts und `OCR_DPI_REINTENTO` ist die Auflösung des zweiten OCR-Messwerts. Die Seiten werden nicht in Schwarz-Weiß konvertiert, denn in Tests liest die OCR-Engine solche Seiten viel schlechter. `CONFIANZA_MINIMA` ist das OCR-Vertrauen, unterhalb dessen eine nicht verifizierte Menge als verdächtig aufgeführt wird.
+`OCR_DPI` ist die Auflösung des ersten und dritten OCR-Messwerts und `OCR_DPI_REINTENTO` ist die Auflösung des zweiten OCR-Messwerts. Die Seiten werden nicht in Schwarz-Weiß konvertiert, weil in Tests die OCR-Engine solche Seiten viel schlechter gelesen hat. `CONFIANZA_MINIMA` ist das OCR-Vertrauen, unterhalb dessen eine nicht verifizierte Menge als verdächtig aufgeführt wird.
 
-`PROCESOS` ist die Anzahl der Prozesse, die Seiten gleichzeitig lesen. Der Standardwert `0` bedeutet automatisch. `LADO_MAX_PX` ist die größte Größe in Pixeln der längeren Seite eines Seitenbildes für die OCR. Der Standardwert ist `6000`. Die OCR-Engine reduziert sowieso jedes Bild auf 2000 Pixel, so dass diese Grenze das Ergebnis für normale Seiten nicht ändert. Es verhindert riesige Bilder, zum Beispiel von Scans, die mit 72 Punkten pro Zoll gespeichert wurden, deren Seiten etwa einen Meter hoch sind. `LADO_MAX_PX_AMPLIADA` ist die gleiche Grenze für die dritte Lesung, bevor das Bild vergrößert wird. `USAR_CACHE` entscheidet, ob der Cache verwendet wird. `CACHE_VERSION` ist Teil des Namens jeder Cache-Datei; ändern Sie es, damit das Programm den Cache ignoriert, zum Beispiel nach einer Änderung der OCR-Einstellungen. `AVISO_LENTO_S` ist die Anzahl der Sekunden, nach denen eine langsame Seite gemeldet wird. `LIMITE_PAGINA_S` ist die Anzahl der Sekunden, nach denen eine Seite aufgegeben wird. Der Standardwert ist `600`.
+`PROCESOS` ist die Anzahl der Prozesse, die Seiten gleichzeitig lesen. Der Standardwert `0` bedeutet automatisch. `LADO_MAX_PX` ist die größte Größe in Pixeln der längeren Seite eines Seitenbildes für die OCR. Der Standardwert ist `6000`. Die OCR-Engine reduziert jedes Bild ohnehin auf 2000 Pixel, so dass diese Grenze das Ergebnis für normale Seiten nicht ändert. Es verhindert riesige Bilder, zum Beispiel von Scans, die mit 72 Punkten pro Zoll gespeichert wurden, deren Seiten etwa einen Meter hoch sind. `LADO_MAX_PX_AMPLIADA` ist die gleiche Grenze für die dritte Lesung, bevor das Bild vergrößert wird. `USAR_CACHE` entscheidet, ob der Cache verwendet wird. `CACHE_VERSION` ist Teil des Namens jeder Cache-Datei; ändern Sie es, damit das Programm den Cache ignoriert, zum Beispiel nach einer Änderung der OCR-Einstellungen. `AVISO_LENTO_S` ist die Anzahl der Sekunden, nach denen eine langsame Seite gemeldet wird. `LIMITE_PAGINA_S` ist die Anzahl der Sekunden, nach denen eine Seite aufgegeben wird. Der Standardwert ist `600`.
 
 `PRIORIDAD_RENGLON` entscheidet, welche Mengenreihe in Formularen verwendet wird, in denen jede Spalte ein Produkt beschreibt.
 
 `SEMANTICA` und `TIPO_DOCUMENTO` enthalten die Wörter, die als ein Signal unter anderem verwendet werden, um Spaltentitel zu verstehen und den Typ einer Seite zu erkennen.
+
+## Sonstige Länder, Sprachen und Sektoren
+
+Das Programm wurde für eine Rücknahme eines pharmazeutischen Produkts in Mexiko geschrieben. Ein Profil passt es an Dokumente aus anderen Ländern, in anderen Sprachen und aus anderen Sektoren an. Das Standardprofil `traxicoll` Das ist dieser Rückzug. Es wird von den anderen Profilen nicht geändert.
+
+Die Profile sind:
+
+- `traxicoll`: die aktuelle Auszahlung. Spanische Dokumente, Chargennummern mit acht Ziffern, die mit `25` oder `26` beginnen, und die erwarteten Summen und Grenzen dieser Rücknahme.
+- `mx`: Mexiko. Spanische und englische Dokumente. Beträge werden als `1,234.56` geschrieben.
+- `us`: Vereinigte Staaten. Englische Dokumente. Beträge werden als `$1,234.56` geschrieben.
+- `de`: Deutschland. Deutsche und englische Dokumente. Beträge werden als `1.234,56 €` und Daten als `12.03.2026` geschrieben.
+- `eu`: Europäische Union. Englische, deutsche, französische, italienische und spanische Dokumente. Beide Arten des Schreibens von Beträgen werden akzeptiert.
+
+Alle Profile außer `traxicoll` kennen die Wörter für Chargennummern, Mengen, Retouren, Inventare und Summen in ihren Sprachen. Beispiele sind `Lot No.`, `Charge`, `Qty`, `Units`, `Returned` und `On hand` in englischer Sprache und `Ch.-B.`, `Charge`, `Los-Nr.`, `Menge`, `Stück`, `Rücksendung` und `Lagerbestand` in deutscher Sprache. Sie akzeptieren auch die Chargennummer im vom Menschen lesbaren Text eines GS1-Barcodes, beispielsweise `(10)AB2402`. Die Programmnachrichten und die Datei revisar_a_mano.txt bleiben auf Spanisch. Die Titel in totales_lotes.xlsx sind in Englisch für die Profile `us` und `eu` und in Deutsch für das Profil `de`.
+
+Die anderen Profile kennen nicht die erwarteten Summen, die Grenzen für eine Charge, den Namen der Referenz-Excel-Datei oder das Format der Chargennummern. Ohne erwartete Summen und Limits überprüft das Programm sie nicht. Das Format der Chargennummern wird der ersten dieser vorhandenen Quellen entnommen:
+
+1. die Einstellung `batch_pattern` in der Konfigurationsdatei;
+2. Sektor für den Sektor `automotive`: die Fahrzeug-Identifizierungsnummer (VIN) mit 17 Zeichen gemäß ISO 3779;
+3. die Excel-Referenzdatei: die Werte in der Spalte, deren Titel `Lote`, `Lot`, `Charge`, `Charge`, `Los` oder `Lotto` lautet. Nur diese Chargennummern werden dann in den Dokumenten erkannt.
+
+Wenn keine dieser Quellen existiert, stoppt das Programm mit dem Rückgabecode 2 und erklärt, was fehlt.
+
+Die Sektoren fügen die Einheiten und die Etiketten hinzu, die im Sektor üblich sind:
+
+- `pharma`: Flaschen, Vials, Ampullen, Packungen; `Ch.-B.`, GS1 `(10)`.
+- `devices`: Geräte, Kits; GS1 `(10)` und `(21)`, `REF`, `UDI`, `SN`.
+- `food`: Beutel, Dosen, Flaschen, Gläser, Packungen; das Chargenetikett `L`, `Lot code`, `MHD`, `Best before`.
+- `cosmetics`: Tuben, Gläser, Flaschen; `Charge code`.
+- `automotive`: Fahrzeuge; `VIN`, `NIV`, `FIN`.
+- `consumer`: Artikel, Artikel; `Model`, `Date code`.
+- `chemicals`: Fässer, Eimer, Beutel, Behälter, Kanister.
+- `general`: keine Zusätze.
+
+### Die Konfigurationsdatei
+
+Die Konfigurationsdatei ist eine JSON-Datei mit dem Namen `tute-lote.json` im Ordner mit den PDF-Dokumenten oder die Datei, die mit `--config` angegeben wird. Alle Schlüssel sind optional. Zum Beispiel:
+
+```
+{
+  "profile": "de",
+  "sector": "food",
+  "batch_pattern": "L\\d{6}",
+  "expected": {"withdrawn": 12400, "not_distributed": 3100, "total": 15500},
+  "max_per_batch": {"withdrawn": 5000, "not_distributed": 8000},
+  "reference_excel": "Rueckrufliste",
+  "only_batches_in_excel": true,
+  "skip_name_pattern": "zu pr(ü|ue)fen|FALTA REVISION",
+  "languages": ["fr"],
+  "number_format": "auto",
+  "output_language": "de"
+}
+```
+
+- `profile` und `sector` wählen das Profil und den Sektor aus. Die Optionen `--perfil` und `--sector` haben Priorität.
+- `batch_pattern` ist ein regulärer Ausdruck für eine Chargennummer, ohne das Label. In JSON wird zweimal ein Backslash geschrieben. Beispiele: `L\\d{6}` für ein `L` und sechs Ziffern, `[A-Z]{2}\\d{4}` für zwei Buchstaben und vier Ziffern.
+- `expected` enthält die erwarteten Summen: zurückgezogene Stücke, Stücke, die nicht verteilt wurden, und die Summe für die Zerstörung. Der Wert `null` oder `0` schaltet einen Check ab. Die Optionen `--retirado-esperado`, `--no-distribuida-esperada` und `--total-esperado` haben Priorität.
+- `max_per_batch` enthält die Grenzwerte für eine Charge.
+- `reference_excel` ist der Name der Excel-Referenzdatei ohne die Erweiterung.
+- `only_batches_in_excel` entscheidet, ob Mengen mit einer Chargennummer, die nicht in der Excel-Datei enthalten ist, ausgelassen werden. Der Standardwert ist `true`.
+- `skip_name_pattern` ist ein regulärer Ausdruck für die Namen von Dateien, die übersprungen werden.
+- `languages` fügt die Wörter von mehr Sprachen hinzu: `en`, `de`, `fr`, `it`.
+- `number_format` ist `mx` (nur `1,234.56`) oder `auto` (auch `1.234,56`).
+- `output_language` ist die Sprache der Titel in totales_lotes.xlsx: `es`, `en` oder `de`.
+
+Das Programm zeigt die Konfigurationsdatei und das Profil, das es zu Beginn des Laufs verwendet. Ein Schlüssel, den das Programm nicht kennt, oder ein Wert, der nicht gültig ist, stoppt das Programm mit dem Rückgabecode 2. Akzeptieren Sie keine Konfigurationsdatei von einer anderen Person, ohne sie zu lesen: Sie ändert, was das Programm zählt.
+
+## Die Pipeline von kleinen Programmen
+
+Der Ordner `etapas` enthält kleine Programme. Jedes Programm macht eine Sache, liest Zeilen von JSON auf seinen Standardeingang und schreibt Zeilen von JSON auf seinen Standardausgang, so dass die Programme mit Pipes verbunden werden können:
+
+- `etapas/paginas.py PATH...` liest die Seiten der PDF-Dokumente parallel und mit dem Cache von lotes_auto.py. Es schreibt eine Zeile für jede Seite, mit den Wörtern und ihren Positionen.
+- `etapas/texto.py` schreibt den Text der Seiten, eine Zeile der Seite pro Zeile. Bei `--archivo` beginnt jede Zeile mit dem Namen des PDF und der Seitenzahl.
+- `etapas/cantidades.py` findet die Chargennummern und die Mengen in den Seiten, mit den gleichen Regeln wie lotes_auto.py. Es schreibt eine Zeile für jedes PDF und für jede Menge.
+- `etapas/conciliar.py` addiert die Mengen jeder Charge, wendet die Excel-Referenzdatei, die Limits und die genauen Korrekturen an und schreibt eine Zeile für jede Charge und eine Zusammenfassung.
+- `etapas/excel.py -o FILE` schreibt totales_lotes.xlsx aus den Zeilen von conciliar.py.
+
+Die komplette Kette auf Linux, macOS und BSD:
+
+```
+python etapas/paginas.py /path/to/pdfs | python etapas/cantidades.py --carpeta /path/to/pdfs | python etapas/conciliar.py --carpeta /path/to/pdfs | python etapas/excel.py -o totales.xlsx
+```
+
+Unter Windows, in PowerShell:
+
+```
+$p="$env:USERPROFILE\tute-lote\python\python.exe"; $e="$env:USERPROFILE\tute-lote\etapas"; & $p "$e\paginas.py" "C:\path\to\pdfs" | & $p "$e\cantidades.py" --carpeta "C:\path\to\pdfs" | & $p "$e\conciliar.py" --carpeta "C:\path\to\pdfs" | & $p "$e\excel.py" -o totales.xlsx
+```
+
+Weitere Beispiele:
+
+- `python etapas/paginas.py doc.pdf | python etapas/texto.py | grep -i lote` zeigt die Zeilen eines PDFs, die eine Charge erwähnen.
+- `python etapas/paginas.py /path/to/pdfs > paginas.jsonl` speichert die Seiten. Spätere Befehle können diese Datei anstelle der PDF-Dokumente lesen: `python etapas/cantidades.py < paginas.jsonl`.
+
+Die Zeilen enthalten nur ASCII-Zeichen. Buchstaben mit Akzenten werden als Fluchtsequenzen geschrieben, so dass die Zeilen unverändert durch jedes Rohr gehen, einschließlich Windows PowerShell 5.1. Die Programme `cantidades.py`, `conciliar.py` und `excel.py` akzeptieren die Optionen `--perfil`, `--sector` und `--config`. `cantidades.py` und `conciliar.py` akzeptieren auch `--excel` und `--carpeta`, den Ordner, in dem sie nach der Referenz-Excel-Datei und nach `tute-lote.json` suchen.
+
+Die Pipeline liest keine zweifelhaften Seiten ein zweites und ein drittes Mal und schreibt revisar_a_mano.txt nicht. Verwenden Sie lotes_auto.py für die gesamte Arbeit. Auf den 120 Beispieldokumenten liefert die Pipeline die gleichen Mengen wie lotes_auto.py; die Tests überprüfen dies nach jeder Änderung.
 
 ## Installation
 
@@ -218,7 +321,7 @@ Diese Anweisungen sind für 64-Bit-Prozessoren von Intel und AMD. Verwenden Sie 
 
 ### macOS
 
-Sie benötigen nur Administratorrechte, um Python zu installieren. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
+Sie benötigen Administratorrechte nur zur Installation von Python. Installieren Sie `Python 3.12` mit dem Installer von python.org (https://www.python.org/downloads/macos/) oder mit Homebrew (`brew install python@3.12`). Führen Sie dann den folgenden Befehl in der Terminal-Anwendung aus:
 
 ```
 mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
@@ -290,9 +393,9 @@ Wenn Ihr Alpine Linux-System `sudo` anstelle von `doas` verwendet, ersetzen Sie 
 
 Auf diesen Systemen liest das Programm nur PDFs, die Text enthalten. Die OCR-Engine ist für diese Systeme nicht verfügbar. Die PDF-Rendering-Bibliothek, die pdfplumber verwendet, ist ebenfalls nicht verfügbar, aber pdfplumber kann Text ohne sie lesen.
 
-Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, sodass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
+Das Paket pdfminer.six benötigt das Paket cryptography. Ein Rust-Compiler wird benötigt, um cryptography aus dem Quellcode zu erstellen, so dass cryptography aus den Paketen des Systems installiert wird. Alle anderen Pakete sind in reinem Python geschrieben. Sie werden ohne ihre optionalen Abhängigkeiten installiert.
 
-Führen Sie unter FreeBSD den ersten Befehl als root-Benutzer aus, beispielsweise mit `su` oder `sudo`:
+Führen Sie auf FreeBSD den ersten Befehl als root-Benutzer aus, beispielsweise mit `su` oder `sudo`:
 
 ```
 pkg install py311-pip py311-cryptography
@@ -348,7 +451,9 @@ cd ~/tute-lote && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-
 
 Verwenden Sie auf FreeBSD `fetch` auf die gleiche Weise. Verwenden Sie auf OpenBSD und NetBSD `ftp`.
 
-Das Projekt hieß früher pdf-totals. Installationen, die vor dem neuen Namen vorgenommen wurden, verwenden den Ordner `pdf-totals` anstelle von `tute-lote`. Sie arbeiten weiter: Ersetzen Sie `tute-lote` durch `pdf-totals` in den Ordnerpfaden der oben genannten Befehle, aber nicht in den Adressen.
+lotes_auto.py benötigt den Ordner `etapas` nicht. Um die Pipeline kleiner Programme zu verwenden, laden Sie das Repository als ZIP-Datei von GitHub herunter oder klonen Sie es mit git und behalten Sie den Ordner `etapas` neben lotes_auto.py.
+
+Das Projekt hieß früher pdf-totals. Installationen, die vor dem neuen Namen erstellt wurden, verwenden den Ordner `pdf-totals` anstelle von `tute-lote`. Sie arbeiten weiter: Ersetzen Sie `tute-lote` durch `pdf-totals` in den Ordnerpfaden der oben genannten Befehle, aber nicht in den Adressen.
 
 Nach einer Änderung kann GitHub die vorherige Version für einige Minuten liefern. Um sofort eine bestimmte Version zu erhalten, ersetzen Sie `main` in der Adresse durch die Kennung des Commits.
 
@@ -375,9 +480,9 @@ pip kann rapidocr_onnxruntime nicht installieren. Dieses Paket unterstützt Pyth
 
 Die OCR liest handschriftliche Zahlen, wenn sie klar geschrieben sind. Es liest nicht zuverlässig Handschrift, die schwer zu lesen ist, oder handschriftliche Abkürzungen wie `N/A`. Mengen, die von Hand in ein Formular geschrieben werden, werden daher oft nicht gelesen. Diese PDFs sind in revisar_a_mano.txt aufgeführt und müssen von einer Person überprüft werden.
 
-Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan verschwommen ist. Mengen, die durch einen Preis, eine gedruckte Gesamtsumme oder den Rückzugsbericht verifiziert werden, sind zuverlässig. Mengen, die nicht verifiziert sind, sollten mit dem PDF verglichen werden.
+Die OCR kann eine Ziffer falsch lesen, insbesondere wenn ein Scan unscharf ist. Mengen, die durch einen Preis, eine gedruckte Gesamtsumme oder den Rückzugsbericht verifiziert werden, sind zuverlässig. Mengen, die nicht verifiziert sind, sollten mit dem PDF verglichen werden.
 
-Wenn ein Prozess unerwartet stoppt, beispielsweise weil der Speicher voll ist, liest das Programm die verbleibenden Seiten nacheinander in einem einzigen Prozess. Die OCR dauert etwa ein bis fünf Sekunden für jede Seite und Prozess. Der erste Durchlauf über einen großen Ordner dauert daher einige Minuten. Die nächsten Läufe verwenden den Cache und dauern Sekunden. Nur die zweifelhaften Seiten werden ein zweites und ein drittes Mal gelesen.
+Wenn ein Prozess unerwartet stoppt, beispielsweise weil der Speicher voll ist, liest das Programm die restlichen Seiten nacheinander in einem einzigen Prozess. Die OCR dauert etwa ein bis fünf Sekunden für jede Seite und Prozess. Der erste Durchlauf über einen großen Ordner dauert daher einige Minuten. Die nächsten Läufe verwenden den Cache und dauern Sekunden. Nur die zweifelhaften Seiten werden ein zweites und ein drittes Mal gelesen.
 
 Das Programm erwartet, dass Mengen ganze Stückzahlen sind. Es konvertiert keine Dokumente, die Boxen oder andere Einheiten zählen.
 
@@ -385,11 +490,13 @@ Das Programm erwartet, dass Mengen ganze Stückzahlen sind. Es konvertiert keine
 
 - lotes_auto.py ist das Programm.
 - diagnostico.py ist das Diagnosewerkzeug. Es muss sich im gleichen Ordner wie lotes_auto.py befinden.
+- Der Ordner `etapas` enthält die Pipeline von kleinen Programmen. Es muss sich im gleichen Ordner wie lotes_auto.py befinden.
 - requirements.txt listet die getesteten Versionen der erforderlichen Python-Pakete auf. requirements-dev.txt fügt die Pakete für die Tests und für die Beispieldokumente hinzu.
 - README.md ist eine kurze Beschreibung. Es ist auch als README.de.md und README.es.md verfügbar.
 - Der Ordner `docs` enthält dieses Handbuch in Englisch, Deutsch und Spanisch sowie die Datei `security-feeds.opml`. Diese Datei ist eine Liste von Feeds mit den Veröffentlichungen jedes Python-Pakets, das das Programm verwendet. Importieren Sie es in einen Feed-Reader, um den Updates zu folgen.
 - Der Ordner `examples` enthält 120 erfundene PDF-Dokumente, eine Excel-Referenzdatei und das erwartete Ergebnis in `expected.json`. Siehe `examples/README.md`.
-- `tools/make_examples.py` erstellt die Beispieldokumente. `tools/check_examples.py` führt das Programm auf ihnen aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis.
+- `tools/make_examples.py` erstellt die Beispieldokumente. `tools/check_examples.py` führt das Programm und die Pipeline auf ihnen aus und vergleicht das Ergebnis mit dem erwarteten Ergebnis.
+- `tools/check_profiles.py` erstellt erfundene englische, deutsche und spanische Dokumente und prüft die Profile `us`, `de` und `mx` sowie die Sektoren `food` und `automotive`.
 - `tools/translate_docs.py` übersetzt die Dokumentation.
 - `AGENTS.md` enthält die Regeln für KI-Agenten, die das Programm ausführen, testen oder ändern.
 - `SECURITY.md` beschreibt, wie eine Schwachstelle gemeldet wird, und das Sicherheitsmodell.

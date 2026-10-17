@@ -1,6 +1,6 @@
 # Manual de tute-lote
 
-Este archivo fue traducido automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
+Este archivo se tradujo automáticamente del original inglés con Argos Translate. Si difiere del original inglés, se aplica el original inglés.
 
 ## Nombre
 
@@ -11,8 +11,9 @@ diagnostico.py - mostrar lo que lotes_auto.py lee y detecta en uno o más docume
 ## Sinopsis
 
 ```
-python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] FOLDER
-python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
+python lotes_auto.py [-h] [--version] [--excel PATH] [--retirado-esperado N] [--no-distribuida-esperada N] [--total-esperado N] [--procesos N] [--sin-cache] [--perfil PROFILE] [--sector SECTOR] [--config PATH] FOLDER
+python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] [--perfil PROFILE] [--sector SECTOR] [--config PATH] [--excel PATH] PATH
+python etapas/paginas.py PATH... | python etapas/cantidades.py | python etapas/conciliar.py --carpeta FOLDER | python etapas/excel.py -o FILE
 ```
 
 ## Descripción
@@ -20,7 +21,7 @@ python diagnostico.py [-h] [--version] [--lineas N] [--lectura N] PATH
 lotes_auto.py lee todos los archivos PDF en la carpeta FOLDER y en todos sus subcarpetas. Los documentos se refieren a la retirada de un producto del mercado: formularios de devolución, recibos de entrega, recibos de bienes, listas de inventarios e informes de retiro. Para cada número de lote el programa calcula tres cantidades:
 
 - La cantidad retirada (`Cantidad de producto retirado`). Estas son las piezas que fueron devueltas o recuperadas del mercado. Vienen de formularios de devolución, recibos de entrega y recibos de bienes.
-- La cantidad no distribuida (`Cantidad no distribuida`). Estas son las piezas que todavía están en inventario y nunca fueron distribuidas. Se toman del archivo de referencia Excel, que se describe a continuación. Sin el archivo de referencia Excel, proceden de documentos de inventario y del informe de retirada.
+- La cantidad no distribuida (`Cantidad no distribuida`). Estas son las piezas que todavía están en inventario y nunca fueron distribuidas. Se extraen del archivo de referencia Excel, que se describe a continuación. Sin el archivo de referencia Excel, vienen de los documentos de inventario y del informe de retiro.
 - La cantidad total para la destrucción (`Cantidad total para destrucción`). Esta es la suma de las otras dos cantidades.
 
 El programa revisa el resultado. Los límites se aplican a cada lote por su cuenta, no a la suma de una tabla: ningún lote puede tener más de piezas retiradas `48,042` o más de piezas `82,090` que no fueron distribuidas. Las cantidades retiradas de todos los lotes deben agregar exactamente `209,908`, las cantidades no distribuidas a exactamente `134,543`, y el total para la destrucción a exactamente `344,451`. Estos valores pueden cambiarse en la configuración o en la línea de comandos.
@@ -47,8 +48,8 @@ Primero, el programa encuentra las filas que contienen un número de lote. Las c
 
 Luego el programa decide qué columna contiene el número de piezas. Sólo se consideran columnas con números enteros. Números de filas, códigos que repiten en cada fila y años están excluidos. Se utilizan las siguientes pruebas, desde más fuerte hasta más débil:
 
-1. Cantidad multiplicada por el precio unitario igual al precio total en la misma fila. Por ejemplo, `4,408` multiplicado por `$27.00` es `$119,016.00`.
-2. La suma de la columna equivale a un número impreso en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
+1. Cantidades multiplicadas por el precio unitario igual al precio total en la misma fila. Por ejemplo, `4,408` multiplicado por `$27.00` es `$119,016.00`.
+2. La suma de la columna equivale a un número que se imprime en otro lugar del documento, por ejemplo `TOTAL DE PIEZAS 6,889` o `No CAJAS / PIEZAS 1978`.
 3. El título de la columna. Títulos como `PIEZAS`, `CANTIDAD EN PIEZAS`, `No. de piezas`, `RECIBIDA` o `DEVUELTAS` cuentan a favor. Títulos como `FACTURADA` o `DISTRIBUIDA` cuentan con contra, porque describen la cantidad original y no la cantidad devuelta. Títulos con `CAJAS` cuentan contra, porque cuentan cajas y no piezas.
 
 Un informe de retiro es reconocido solo por aritmética. En un informe de retiro, cada fila contiene cinco números para un lote, y dos relaciones mantienen en cada fila:
@@ -58,7 +59,7 @@ Un informe de retiro es reconocido solo por aritmética. En un informe de retiro
 
 El programa encuentra las columnas que cumplen estas relaciones, por lo que los títulos de columna no son necesarios. La columna retirada es la que nunca es más grande que la columna distribuida. Si una fila del informe no cumple las relaciones, por ejemplo porque el OCR lee un dígito erróneamente, el programa utiliza las relaciones para recuperar el valor correcto.
 
-El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario, las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario dan cantidades no distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
+El tipo de cada cantidad se decide como sigue. Una cantidad no se distribuye si su título de columna o título de fila lo dice, por ejemplo `EXISTENCIA`, `INVENTARIO` o `NO DISTRIBUIDO`. De lo contrario, las palabras de toda la página deciden: páginas sobre devoluciones, retiros o recibos dan cantidades retiradas, y páginas sobre inventario no dan cantidades distribuidas. Si una página no tiene un tipo claro, se utiliza el tipo de las otras páginas del mismo PDF. Si el PDF no tiene un tipo claro, la cantidad cuenta como retirada y se añade una nota.
 
 El programa también lee otros dos diseños:
 
@@ -67,7 +68,7 @@ El programa también lee otros dos diseños:
 
 ## Comprobaciones y correcciones
 
-Cada cantidad está marcada como verificada o no verificada. Una cantidad se verifica cuando las piezas multiplicadas por el precio unitario igual al precio total impreso, cuando la suma de su tabla equivale a un total impreso, o cuando el total de su lote equivale al informe de retirada.
+Cada cantidad está marcada como verificada o no verificada. Se verifica una cantidad cuando las piezas se multiplican por el precio unitario igual al precio total impreso, cuando la suma de su tabla equivale a un total impreso, o cuando el total de su lote equivale al informe de retirada.
 
 Si una tabla contradice su propio total impreso de piezas, y exactamente una fila no se verifica, el programa calcula el valor correcto de esa fila del total impreso. Utiliza el valor corregido sólo si el precio total impreso lo confirma. De lo contrario, el PDF está marcado como malo.
 
@@ -79,8 +80,8 @@ Si un lote excede su límite, no coincide con el informe de retirada, o el total
 
 - Si la otra lectura de exactamente un PDF hace que el lote coincida, esa lectura se utiliza.
 - Si una fila en un PDF es una copia exacta de una fila en otro PDF, y el lote coincide cuando se retira la copia, la copia no se cuenta.
-- Si una cantidad tiene un número de lote que no está en el archivo de referencia Excel, difiere de un lote en el archivo Excel por un dígito o por dos dígitos intercambiados, y hace que el lote coincida exactamente, el número de lote es corregido.
-- Si se leía un golpe de pluma o marca de verificación junto a un número como un dígito extra 1, 7 o 4, y eliminarlo hace que el lote coincida exactamente, el número es corregido.
+- Si una cantidad tiene un número de lote que no está en el archivo de referencia Excel, difiere de un lote en el archivo Excel por un dígito o por dos dígitos intercambiados, y hace que el lote coincida exactamente, el número de lote se corrige.
+- Si una marca de trazo de la pluma o marca de verificación junto a un número fue leído como un dígito extra 1, 7 o 4, y la eliminación hace que el lote coincida exactamente, el número es corregido.
 - Si la otra lectura de exactamente un PDF, o la eliminación de exactamente una fila copiada, hace que el total retirado sea exactamente igual a su total esperado, este cambio se aplica.
 
 Un PDF está marcado como malo sólo cuando la prueba es concluyente: cuando sus propios números contradicen sus propios totales impresos en cada lectura, o cuando contiene una copia exacta que es probada por un lote o por el total esperado. Todas las demás dudas se enumeran como sospechosas y no se cambian.
@@ -104,6 +105,9 @@ Opciones de lotes_auto.py:
 - `--total-esperado N` establece el total previsto para la destrucción. El valor predeterminado es `344,451`. El valor 0 apaga el cheque.
 - `--procesos N` lee páginas N al mismo tiempo, en procesos separados N. El defecto es automático: un proceso para cada núcleo del procesador, a la mayoría de 8, y no más que la memoria gratuita permite (alrededor de 1,2 GB para cada proceso). El valor 1 lee una página después de la otra en un solo proceso.
 - `--sin-cache` lee cada página de nuevo, incluso cuando está en el caché (ver abajo).
+- `--perfil PROFILE` selecciona el país y los idiomas de los documentos. El defecto es `traxicoll`, el retiro actual. Vea la sección sobre otros países, idiomas y sectores.
+- `--sector SECTOR` selecciona el sector de los productos: `pharma`, `devices`, `food`, `cosmetics`, `automotive`, `consumer`, `chemicals` o `general`.
+- `--config PATH` lee la configuración de este archivo de configuración. Sin esta opción, el programa lee el archivo `tute-lote.json` en la carpeta FOLDER, si existe.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
@@ -112,6 +116,8 @@ Opciones de diagnostico.py:
 - `PATH` es un solo archivo PDF, o una carpeta. Si es una carpeta, el programa examina todos los archivos PDF en ella.
 - `--lineas N` no muestra más que líneas N de texto para cada PDF. El valor predeterminado es 40.
 - `--lectura N` utiliza OCR lectura N: 1 es la lectura normal, 2 utiliza una resolución más alta y más contraste, y 3 amplía y afila la imagen.
+- `--perfil`, `--sector` y `--config` trabajan como en lotes_auto.py. Sin `--config`, diagnostico.py lee `tute-lote.json` en la carpeta de PATH, si existe.
+- `--excel PATH` utiliza este archivo de referencia Excel. Sólo se necesita cuando el formato de los números de lotes viene del archivo Excel.
 - `--version` muestra el número de versión. El programa se detiene.
 - `-h` o `--help` muestra un texto de ayuda corta. El programa se detiene.
 
@@ -123,7 +129,7 @@ lotes_auto.py crea la carpeta `resultados_lotes` dentro de la carpeta FOLDER y e
 
 `detalle_lotes.txt` lista, para cada lote, cada cantidad que se encontró, el PDF y la página que lo contienen, ya sea verificada y por qué, y si se cuenta. También muestra los valores del informe de retirada. Utilice este archivo para encontrar la fuente de un total que se ve mal.
 
-`revisar_a_mano.txt` enumera todo lo que necesita una persona, en secciones numeradas: un resumen con los tres totales y sus valores esperados; una lista de acciones en el orden en que deben hacerse; los lotes que no coinciden, con cada cantidad que se encontró para ellos, los PDF sin cantidades legibles que los mencionan, los archivos `FALTA REVISION` que se mencionan, y una nota cuando tal archivo contiene exactamente la cantidad faltada; los lotes de Excel
+`revisar_a_mano.txt` enumera todo lo que necesita una persona, en secciones numeradas: un resumen con los tres totales y sus valores esperados; una lista de acciones en el orden en que deben hacerse; los lotes que no coinciden, con cada cantidad que se encontró para ellos, los PDF sin cantidades legibles que los mencionan, los archivos `FALTA REVISION` que se mencionan, y una nota cuando tal archivo contiene exactamente la cantidad faltada; los números de corrección de Excel
 
 Los archivos cuyo nombre contiene `FALTA REVISION` sólo se leen para informar lo que contienen. Nunca cuentan con un total.
 
@@ -135,7 +141,7 @@ La carpeta `cache` contiene lo que se leía de cada página, un pequeño archivo
 
 ## Mensajes de consola
 
-Mientras funciona, lotes_auto.py muestra una línea para cada PDF cuando todas sus páginas han sido leídas. Debido a que varias páginas se leen al mismo tiempo, los PDFs no siempre se muestran en orden alfabético. Entre corchetes, la línea muestra el número de páginas y los segundos que se necesitaban para leerlas, o `cache` cuando las páginas venían del caché. El texto después de la flecha dice cuántas cantidades retiradas y no distribuidas fueron leídas, si el PDF es un informe de retirada, y si el texto fue leído directamente (`texto`) o con OCR (`OCR`). Otros mensajes:
+Mientras se ejecuta, lotes_auto.py muestra una línea para cada PDF cuando todas sus páginas han sido leídas. Debido a que varias páginas se leen al mismo tiempo, los PDFs no siempre se muestran en orden alfabético. Entre corchetes, la línea muestra el número de páginas y los segundos que se necesitaban para leerlas, o `cache` cuando las páginas provenían del caché. El texto después de la flecha dice cuántas cantidades retiradas y no distribuidas fueron leídas, si el PDF es un informe de retirada, y si el texto fue leído directamente (`texto`) o con OCR (`OCR`). Otros mensajes:
 
 - `-> omitido (FALTA REVISION)` significa que el programa saltó el archivo debido a su nombre.
 - `-> escaneado, OCR no disponible` significa que el PDF es escaneado y que ningún motor OCR está instalado.
@@ -143,7 +149,7 @@ Mientras funciona, lotes_auto.py muestra una línea para cada PDF cuando todas s
 - `Nuevas lecturas` significa que el programa lee las páginas dudosas de los PDF dudosos escaneados de nuevo. Cada línea denomina las páginas que fueron leídas de nuevo.
 - `... sigue leyendo` significa que una página ha tardado mucho. Se muestra cada 45 segundos mientras se lee la página, con el PDF y el número de página, para que se pueda encontrar una página lenta.
 - `*** ... se deja sin leer` significa que una página tomó más de 600 segundos. El programa deja de leer esta página, continúa con las otras páginas, y enumera el PDF en revisar_a_mano.txt con la razón. La página se lee de nuevo en la siguiente carrera.
-- `Tiempo` al final muestra la duración de la ejecución, el número de páginas que fueron leídas, y el número de páginas que vinieron de la caché.
+- `Tiempo` al final muestra la duración de la ejecución, el número de páginas que fueron leídas, y el número de páginas que provenían del caché.
 
 Al final, el programa muestra los tres totales y compara el total para la destrucción con el total esperado. La palabra `COINCIDE` significa que los totales son iguales. De lo contrario se muestra la diferencia. Luego enumera los PDF que están marcados como malos.
 
@@ -181,6 +187,103 @@ Los ajustes están al principio del archivo lotes_auto.py. Puedes cambiarlos con
 
 `SEMANTICA` y `TIPO_DOCUMENTO` contienen las palabras que se utilizan como una señal entre otros para comprender los títulos de columna y reconocer el tipo de página.
 
+## Otros países, idiomas y sectores
+
+El programa fue escrito para una retirada de un producto farmacéutico en México. Un perfil lo adapta a documentos de otros países, de otros idiomas y de otros sectores. El perfil predeterminado `traxicoll` es este retiro. No es cambiado por los otros perfiles.
+
+Los perfiles son:
+
+- `traxicoll`: el retiro actual. Documentos españoles, números de lotes con ocho dígitos que comienzan con `25` o `26`, y los totales y límites esperados de este retiro.
+- `mx`- México. Documentos en español e inglés. Las cantidades se escriben como `1,234.56`.
+- `us`: Estados Unidos. Documentos en inglés. Las cantidades se escriben como `$1,234.56`.
+- `de`Alemania. Documentos alemanes e inglés. Las cantidades se escriben como `1.234,56 €`, y fechas `12.03.2026`.
+- `eu`: la Unión Europea. Documentos en inglés, alemán, francés, italiano y español. Ambas formas de escribir cantidades son aceptadas.
+
+Todos los perfiles excepto `traxicoll` conocen las palabras para números de lotes, cantidades, rendimientos, inventarios y totales en sus idiomas. Ejemplos son `Lot No.`, `Batch`, `Qty`, `Units`, `Returned` y `On hand` en inglés, y `Ch.-B.`, `Charge`, `Los-Nr.`, `Menge`, `Stück`, `Rücksendung` y `Lagerbestand` en alemán. También aceptan el número de lotes en el texto legible por humanos de un código de barras GS1, por ejemplo `(10)AB2402`. Los mensajes del programa y el archivo revisar_a_mano.txt permanecen en español. Los títulos en totales_lotes.xlsx están en inglés para los perfiles `us` y `eu`, y en alemán para el perfil `de`.
+
+Los otros perfiles no conocen los totales esperados, los límites de un lote, el nombre del archivo de referencia Excel, o el formato de los números de lote. Sin los totales y límites esperados, el programa no los revisa. El formato de los números de lotes se toma de la primera de estas fuentes que existe:
+
+1. la configuración `batch_pattern` en el archivo de configuración;
+2. el sector, para el sector `automotive`: el número de identificación del vehículo (VIN) con 17 caracteres, según se define en ISO 3779;
+3. el archivo de referencia Excel: los valores en la columna cuyo título es `Lote`, `Lot`, `Batch`, `Charge`, `Los` o `Lotto`. Sólo estos números de lote son entonces reconocidos en los documentos.
+
+Si ninguna de estas fuentes existe, el programa se detiene con el código de retorno 2 y explica lo que falta.
+
+Los sectores agregan las unidades y las etiquetas que son comunes en el sector:
+
+- `pharma`: botellas, frascos, ampollas, paquetes; `Ch.-B.`, GS1 `(10)`.
+- `devices`: dispositivos, kits; GS1 `(10)` y `(21)`, `REF`, `UDI`, `SN`.
+- `food`: bolsas, latas, botellas, frascos, paquetes; la etiqueta de lote `L`, `Lot code`, `MHD`, `Best before`.
+- `cosmetics`: tubos, frascos, botellas; `Batch code`.
+- `automotive`: vehículos; `VIN`, `NIV`, `FIN`.
+- `consumer`: artículos, artículos; `Model`, `Date code`.
+- `chemicals`: tambores, pails, bolsas, contenedores, botes.
+- `general`: sin adiciones.
+
+### El archivo de configuración
+
+El archivo de configuración es un archivo JSON con el nombre `tute-lote.json` en la carpeta con los documentos PDF, o el archivo que se da con `--config`. Todas las llaves son opcionales. Por ejemplo:
+
+```
+{
+  "profile": "de",
+  "sector": "food",
+  "batch_pattern": "L\\d{6}",
+  "expected": {"withdrawn": 12400, "not_distributed": 3100, "total": 15500},
+  "max_per_batch": {"withdrawn": 5000, "not_distributed": 8000},
+  "reference_excel": "Rueckrufliste",
+  "only_batches_in_excel": true,
+  "skip_name_pattern": "zu pr(ü|ue)fen|FALTA REVISION",
+  "languages": ["fr"],
+  "number_format": "auto",
+  "output_language": "de"
+}
+```
+
+- `profile` y `sector` seleccionan el perfil y el sector. Las opciones `--perfil` y `--sector` tienen prioridad.
+- `batch_pattern` es una expresión regular para un número de lote, sin la etiqueta. En JSON, se escribe dos veces. Ejemplos: `L\\d{6}` para un `L` y seis dígitos, `[A-Z]{2}\\d{4}` para dos letras y cuatro dígitos.
+- `expected` contiene los totales esperados: piezas retiradas, piezas que no fueron distribuidas, y el total para la destrucción. El valor `null` o `0` cambia un check off. Las opciones `--retirado-esperado`, `--no-distribuida-esperada` y `--total-esperado` tienen prioridad.
+- `max_per_batch` contiene los límites para un lote.
+- `reference_excel` es el nombre del archivo de referencia Excel sin la extensión.
+- `only_batches_in_excel` decide si las cantidades con un número de lote que no está en el archivo Excel se dejan fuera. El valor predeterminado es `true`.
+- `skip_name_pattern` es una expresión regular para los nombres de los archivos que se saltan.
+- `languages` añade las palabras de más idiomas: `en`, `de`, `fr`, `it`.
+- `number_format` es `mx` (sólo `1,234.56`) o `auto` (también `1.234,56`).
+- `output_language` es el idioma de los títulos en totales_lotes.xlsx: `es`, `en` o `de`.
+
+El programa muestra el archivo de configuración y el perfil que utiliza al comienzo de la carrera. Una clave que el programa no sabe, o un valor que no es válido, detiene el programa con código de retorno 2. No acepte un archivo de configuración de otra persona sin leerlo: cambia lo que cuenta el programa.
+
+## El oleoducto de programas pequeños
+
+La carpeta `etapas` contiene pequeños programas. Cada programa hace una cosa, lee líneas de JSON en su entrada estándar y escribe líneas de JSON en su salida estándar, para que los programas puedan conectarse con tuberías:
+
+- `etapas/paginas.py PATH...` lee las páginas de los documentos PDF, en paralelo y con el caché de lotes_auto.py. Escribe una línea para cada página, con las palabras y sus posiciones.
+- `etapas/texto.py` escribe el texto de las páginas, una línea de la página por línea. Con `--archivo`, cada línea comienza con el nombre del PDF y el número de página.
+- `etapas/cantidades.py` encuentra los números de lote y las cantidades en las páginas, con las mismas reglas que lotes_auto.py. Escribe una línea para cada PDF y para cada cantidad.
+- `etapas/conciliar.py` añade las cantidades de cada lote, aplica el archivo de referencia Excel, los límites y las correcciones exactas, y escribe una línea para cada lote y un resumen.
+- `etapas/excel.py -o FILE` escribe totales_lotes.xlsx de las líneas de conciliar.py.
+
+La cadena completa en Linux, macOS y BSD:
+
+```
+python etapas/paginas.py /path/to/pdfs | python etapas/cantidades.py --carpeta /path/to/pdfs | python etapas/conciliar.py --carpeta /path/to/pdfs | python etapas/excel.py -o totales.xlsx
+```
+
+En Windows, en PowerShell:
+
+```
+$p="$env:USERPROFILE\tute-lote\python\python.exe"; $e="$env:USERPROFILE\tute-lote\etapas"; & $p "$e\paginas.py" "C:\path\to\pdfs" | & $p "$e\cantidades.py" --carpeta "C:\path\to\pdfs" | & $p "$e\conciliar.py" --carpeta "C:\path\to\pdfs" | & $p "$e\excel.py" -o totales.xlsx
+```
+
+Otros ejemplos:
+
+- `python etapas/paginas.py doc.pdf | python etapas/texto.py | grep -i lote` muestra las líneas de un PDF que mencionan un lote.
+- `python etapas/paginas.py /path/to/pdfs > paginas.jsonl` guarda las páginas. Los comandos posteriores pueden leer este archivo en lugar de los documentos PDF: `python etapas/cantidades.py < paginas.jsonl`.
+
+Las líneas contienen sólo caracteres ASCII. Cartas con acentos se escriben como secuencias de escape, por lo que las líneas pasan sin cambios a través de cada tubería, incluyendo Windows PowerShell 5.1. Los programas `cantidades.py`, `conciliar.py` y `excel.py` aceptan las opciones `--perfil`, `--sector` y `--config`. `cantidades.py` y `conciliar.py` también aceptan `--excel` y `--carpeta`, la carpeta donde buscan el archivo de referencia Excel y para `tute-lote.json`.
+
+El oleoducto no lee páginas dudosas por segunda y tercera vez, y no escribe revisar_a_mano.txt. Utilice lotes_auto.py para el trabajo completo. En los 120 documentos de ejemplo, el oleoducto da las mismas cantidades que lotes_auto.py; las pruebas verifican esto después de cada cambio.
+
 ## Instalación
 
 ### Información general
@@ -204,7 +307,7 @@ $d="$env:USERPROFILE\tute-lote"; New-Item -ItemType Directory -Force "$d\python"
 
 El paquete msvc-runtime copia los archivos de tiempo de ejecución Microsoft Visual C++ en la carpeta Python. El motor OCR necesita estos archivos, y algunos sistemas no los tienen. Puede ignorar las advertencias pip sobre scripts que se instalan en una carpeta que no está en PATH.
 
-Use `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
+Usa `curl.exe` y no `curl`. En Windows PowerShell 5.1, `curl` es otro nombre para `Invoke-WebRequest`, que tiene diferentes opciones. Windows 10 incluye `curl.exe` desde la versión 1803.
 
 Para ejecutar el programa:
 
@@ -218,7 +321,7 @@ Estas instrucciones son para procesadores de 64 bits de Intel y AMD. Para Window
 
 ### macOS
 
-Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). Luego ejecute el siguiente comando en la aplicación Terminal:
+Necesita derechos de administrador sólo para instalar Python. Instala `Python 3.12` con el instalador desde python.org (https://www.python.org/downloads/macos/) o con Homebrew (`brew install python@3.12`). A continuación, ejecute el siguiente comando en la aplicación Terminal:
 
 ```
 mkdir -p ~/tute-lote && cd ~/tute-lote && python3.12 -m venv venv && venv/bin/pip install pdfplumber openpyxl rapidocr_onnxruntime && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
@@ -250,7 +353,7 @@ Para ejecutar el programa:
 
 Los párrafos siguientes explican cómo obtener `Python 3.12` en distribuciones comunes de Linux.
 
-Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario de root:
+Debian 12 y Ubuntu 24.04 incluyen una versión adecuada de Python. Instala el módulo venv y el programa curl. Esto necesita el usuario root:
 
 ```
 sudo apt install python3-venv curl
@@ -288,9 +391,9 @@ Si su sistema Alpine Linux utiliza `sudo` en lugar de `doas`, reemplace `doas` c
 
 ### FreeBSD, OpenBSD y NetBSD
 
-En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderizado PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
+En estos sistemas, el programa sólo lee PDFs que contienen texto. El motor OCR no está disponible para estos sistemas. La biblioteca de renderización PDF que utiliza pdfplumber tampoco está disponible, pero pdfplumber puede leer texto sin ella.
 
-El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography está instalado de los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
+El paquete pdfminer.six necesita el paquete cryptography. Se necesita un compilador Rust para construir cryptography del código fuente, por lo que cryptography se instala desde los paquetes del sistema. Todos los demás paquetes están escritos en Python puro. Están instalados sin sus dependencias opcionales.
 
 En FreeBSD, ejecute el primer comando como el usuario root, por ejemplo con `su` o `sudo`:
 
@@ -302,7 +405,7 @@ pkg install py311-pip py311-cryptography
 mkdir -p ~/tute-lote && cd ~/tute-lote && python3.11 -m venv --system-site-packages --without-pip venv && venv/bin/python -m pip install --no-deps pdfplumber pdfminer.six openpyxl et_xmlfile charset-normalizer && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py && fetch https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
 ```
 
-Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. A continuación, utilice el comando matching en lugar de `python3.11`, por ejemplo `python3.12`.
+Los nombres de los paquetes contienen la versión de Python, que es `311` en este ejemplo. Si su sistema utiliza otra versión, encuentre los nombres correctos con el comando `pkg search cryptography`. Luego utilice el comando matching en lugar de `python3.11`, por ejemplo `python3.12`.
 
 En OpenBSD, ejecute el primer comando como el usuario root con `doas`:
 
@@ -334,7 +437,7 @@ Para ejecutar el programa en FreeBSD, OpenBSD o NetBSD:
 
 ## Actualización
 
-Para actualizar el programa, descargue los dos scripts de nuevo. En Windows:
+Para actualizar el programa, descargar los dos scripts de nuevo. En Windows:
 
 ```
 curl.exe -L -o "$env:USERPROFILE\tute-lote\lotes_auto.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/lotes_auto.py; curl.exe -L -o "$env:USERPROFILE\tute-lote\diagnostico.py" https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-lote/main/diagnostico.py
@@ -348,6 +451,8 @@ cd ~/tute-lote && curl -LO https://raw.githubusercontent.com/z4dm42f5kp-ux/tute-
 
 En FreeBSD, utilice `fetch` de la misma manera. En OpenBSD y NetBSD, utilice `ftp`.
 
+lotes_auto.py no necesita la carpeta `etapas`. Para utilizar el oleoducto de programas pequeños, descargar el repositorio como archivo ZIP de GitHub, o clonarlo con git, y mantener la carpeta `etapas` junto a lotes_auto.py.
+
 El proyecto se llamaba pdf-totals antes. Las instalaciones realizadas antes del nuevo nombre utilizan la carpeta `pdf-totals` en lugar de `tute-lote`. Siguen trabajando: reemplazar `tute-lote` con `pdf-totals` en las rutas de carpeta de los comandos anteriores, pero no en las direcciones.
 
 Después de un cambio, GitHub puede entregar la versión anterior durante unos minutos. Para obtener una versión específica inmediatamente, reemplace `main` en la dirección con el identificador del commit.
@@ -356,10 +461,10 @@ Después de un cambio, GitHub puede entregar la versión anterior durante unos m
 
 El archivo Excel no se puede guardar. El programa se detiene con código de retorno 1 cuando totales_lotes.xlsx está abierto en Excel. Cierre el archivo y ejecute el programa de nuevo.
 
-El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retirada, y qué PDFs contribuyen a ellos. Entonces busca estos lotes en detalle_lotes.txt. Las causas comunes son:
+El total no coincide con el total esperado. Abre revisar_a_mano.txt. La sección sobre lotes que no coinciden muestra qué lotes exceden un límite o difieren del informe de retiro, y qué PDFs contribuyen a ellos. Entonces busque estos lotes en detalle_lotes.txt. Las causas comunes son:
 
 - Un PDF que pertenece a la retirada falta de la carpeta, o se llama `FALTA REVISION`.
-- El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se observa como `dudosa`.
+- El OCR leyó un dígito erróneamente. Las dos lecturas de un PDF se comparan, y una diferencia entre ellas se señala como `dudosa`.
 - El mismo documento está en la carpeta dos veces bajo nombres diferentes.
 - El programa utilizó la columna equivocada para la cantidad, porque el documento utiliza un diseño que el programa no sabe. Ejecute diagnostico.py con este PDF para ver qué columna fue elegida y por qué.
 
@@ -385,11 +490,13 @@ El programa espera que las cantidades sean números enteros de piezas. No convie
 
 - lotes_auto.py es el programa.
 - diagnostico.py es la herramienta de diagnóstico. Debe estar en la misma carpeta que lotes_auto.py.
+- La carpeta `etapas` contiene el oleoducto de pequeños programas. Debe estar en la misma carpeta que lotes_auto.py.
 - requirements.txt enumera las versiones probadas de los paquetes Python requeridos. requirements-dev.txt añade los paquetes para las pruebas y para los documentos de ejemplo.
 - README.md es una descripción corta. También está disponible como README.de.md y README.es.md.
-- La carpeta `docs` contiene este manual en inglés, alemán y español, y el archivo `security-feeds.opml`. Este archivo es una lista de feeds con las versiones de cada paquete Python que utiliza el programa. Importarlo en un lector de alimentación para seguir las actualizaciones.
+- La carpeta `docs` contiene este manual en inglés, alemán y español, y el archivo `security-feeds.opml`. Este archivo es una lista de feeds con las liberaciones de cada paquete Python que utiliza el programa. Importarlo en un lector de alimentación para seguir las actualizaciones.
 - La carpeta `examples` contiene 120 documentos PDF inventados, un archivo de referencia Excel y el resultado esperado en `expected.json`. Ver `examples/README.md`.
-- `tools/make_examples.py` crea los documentos de ejemplo. `tools/check_examples.py` ejecuta el programa en ellos y compara el resultado con el resultado esperado.
+- `tools/make_examples.py` crea los documentos de ejemplo. `tools/check_examples.py` ejecuta el programa y el gasoducto en ellos y compara el resultado con el resultado esperado.
+- `tools/check_profiles.py` crea documentos inventados en inglés, alemán y español y comprueba los perfiles `us`, `de` y `mx` y los sectores `food` y `automotive`.
 - `tools/translate_docs.py` traduce la documentación.
 - `AGENTS.md` contiene las reglas para los agentes de IA que ejecutan, prueban o cambian el programa.
 - `SECURITY.md` describe cómo reportar una vulnerabilidad, y el modelo de seguridad.
